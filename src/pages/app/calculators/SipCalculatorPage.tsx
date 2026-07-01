@@ -125,8 +125,8 @@ const STEPS: StepDef[] = [
     formatReview: (v) => v.stepUpType === 'percent' ? 'Percentage step-up' : 'Fixed amount step-up',
   },
   {
-    question: v.stepUpType === 'fixed' ? 'Annual Increase Amount' : 'Annual Step-Up %',
-    description: v.stepUpType === 'fixed' ? 'Fixed rupee amount by which SIP increases each year.' : 'Percentage by which SIP increases each year.',
+    question: 'Annual Step-Up Value',
+    description: 'How much to increase your SIP each year.',
     fields: ['stepUpPct', 'stepUpFixed'], fieldLabels: ['Step-Up Value'],
     renderInput: ({ values: v, onChange }) => v.stepUpType === 'fixed'
       ? <StepInput value={v.stepUpFixed} onChange={(val) => onChange('stepUpFixed', val)} prefix="₹" suffix="per year" placeholder="500" min={0} autoFocus />
