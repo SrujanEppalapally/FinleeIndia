@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, Check, Pencil } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ export function CalcPanel({
     }
   };
 
-  return (
+  return createPortal(
     <>
       {/* Overlay */}
       <div
@@ -250,7 +251,8 @@ export function CalcPanel({
           </div>
         )}
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
