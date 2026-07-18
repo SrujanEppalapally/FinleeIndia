@@ -25,10 +25,10 @@ export function BudgetProgressBar({ category, spent, limit, className = '' }: Bu
   const pct = limit > 0 ? Math.round((spent / limit) * 100) : 0;
   const isOver = pct > 100;
   const overBy = isOver ? spent - limit : 0;
-  // Visual fill: full track represents the budget limit. Over-budget portion
-  // overflows past the track via an absolute-positioned extension.
+  // Visual fill is capped at 100% so it stays inside the track.
+  // When over budget, the whole track fills red with a stripe pattern
+  // to signal overflow; the actual percentage is shown in the label.
   const fillWidth = Math.min(pct, 100);
-  const overflowWidth = isOver ? Math.min(pct - 100, 100) : 0;
 
   return (
     <div className={['flex flex-col gap-1.5', className].join(' ')}>
@@ -38,18 +38,14 @@ export function BudgetProgressBar({ category, spent, limit, className = '' }: Bu
           {pct}%
         </span>
       </div>
-      <div className="relative h-2 bg-[#f0ede6] rounded-full overflow-visible">
+      <div className="relative h-2 bg-[#f0ede6] rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${barColor(pct)}`}
+          className={[
+            'h-full rounded-full transition-all duration-500',
+            barColor(pct),
+          ].join(' ')}
           style={{ width: `${fillWidth}%` }}
         />
-        {isOver && (
-          <div
-            className="absolute top-0 left-full h-full bg-[#a12c7b]/60 rounded-r-full transition-all duration-500"
-            style={{ width: `${overflowWidth}%` }}
-            title={`Over budget by ${formatINR(overBy)}`}
-          />
-        )}
       </div>
       <div className="flex items-center justify-between">
         <span className="text-xs text-[#7a7974]">
