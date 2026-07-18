@@ -10,6 +10,8 @@ import {
   BarChart2,
   X,
   Settings,
+  Repeat,
+  Trash2,
 } from 'lucide-react';
 import { KPICard, Badge, Button, BudgetProgressBar, Skeleton, Input, Select } from '../../components/ui';
 import { useToast } from '../../contexts/ToastContext';
@@ -94,6 +96,30 @@ const TXN_CATEGORIES = [
 const BUDGET_CATEGORIES = [
   'Food', 'Transport', 'Shopping', 'Utilities', 'Entertainment', 'Other',
 ];
+
+interface Subscription {
+  id: string;
+  name: string;
+  amount: number;
+  renewalDate: string; // ISO date (YYYY-MM-DD)
+}
+
+const INITIAL_SUBSCRIPTIONS: Subscription[] = [
+  { id: 'sub-1', name: 'Netflix',      amount: 499,   renewalDate: '2026-08-12' },
+  { id: 'sub-2', name: 'Spotify',      amount: 119,   renewalDate: '2026-07-28' },
+  { id: 'sub-3', name: 'ChatGPT Plus', amount: 1999,  renewalDate: '2026-08-05' },
+];
+
+const MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+function formatRenewal(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return `Renews on ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+}
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -442,6 +468,80 @@ function QuickNetWorthModal({
   );
 }
 
+// ── Add Subscription Modal ─────────────────────────────────────
+
+function AddSubscriptionModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (sub: Subscription) => void;
+}) {
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState('');
+  const [renewalDate, setRenewalDate] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSave = () => {
+    if (!name.trim()) { setError('Subscription name is required'); return; }
+    const amt = Number(amount);
+    if (!amount || amt <= 0) { setError('Enter a valid amount'); return; }
+    if (!renewalDate) { setError('Renewal date is required'); return; }
+    onSave({
+      id: `sub-${Date.now()}`,
+      name: name.trim(),
+      amount: amt,
+      renewalDate,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center">
+      <div className="fixed inset-0 bg-black/30" onClick={onClose} />
+      <div className="bg-white rounded-t-[12px] lg:rounded-[8px] shadow-card-md w-full max-w-sm relative z-10">
+        <div className="flex items-center justify-between p-5 border-b border-[#f0ede6]">
+          <h3 className="text-base font-semibold text-[#28251d]">Add Subscription</h3>
+          <button onClick={onClose} className="text-[#7a7974] hover:text-[#28251d]">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <Input
+            label="Subscription Name"
+            placeholder="e.g. Netflix"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(''); }}
+            error={error && !name ? error : undefined}
+            autoFocus
+          />
+          <Input
+            label="Amount (₹)"
+            type="number"
+            placeholder="e.g. 499"
+            value={amount}
+            onChange={(e) => { setAmount(e.target.value); setError(''); }}
+            error={error && !amount ? error : undefined}
+          />
+          <Input
+            label="Renewal Date"
+            type="date"
+            value={renewalDate}
+            onChange={(e) => { setRenewalDate(e.target.value); setError(''); }}
+            error={error && !renewalDate ? error : undefined}
+          />
+          {error && !name && !amount && !renewalDate && (
+            <p className="text-xs text-[#a12c7b]">{error}</p>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 p-5 border-t border-[#f0ede6]">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave}>Add Subscription</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────
 
 export function DashboardPage() {
@@ -471,6 +571,10 @@ export function DashboardPage() {
   const [addTxnOpen, setAddTxnOpen] = useState(false);
   const [setBudgetOpen, setSetBudgetOpen] = useState(false);
   const [netWorthOpen, setNetWorthOpen] = useState(false);
+  const [addSubOpen, setAddSubOpen] = useState(false);
+
+  // Subscriptions state
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>(INITIAL_SUBSCRIPTIONS);
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 800);
@@ -501,6 +605,17 @@ export function DashboardPage() {
     setNwItems(items);
     setNetWorthOpen(false);
     showToast('Net worth updated ✓');
+  };
+
+  const handleAddSubscription = (sub: Subscription) => {
+    setSubscriptions((prev) => [sub, ...prev]);
+    setAddSubOpen(false);
+    showToast('Subscription added ✓');
+  };
+
+  const handleRemoveSubscription = (id: string) => {
+    setSubscriptions((prev) => prev.filter((s) => s.id !== id));
+    showToast('Subscription removed');
   };
 
   return (
@@ -612,7 +727,61 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* 3. Goals at a Glance */}
+        {/* 3. Subscriptions */}
+        <div className="bg-white rounded-[8px] shadow-card">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0ede6]">
+            <div className="flex items-center gap-2">
+              <Repeat className="w-4 h-4 text-[#01696f]" />
+              <h3 className="text-sm font-semibold text-[#28251d]">Subscriptions</h3>
+            </div>
+            <button
+              onClick={() => setAddSubOpen(true)}
+              className="text-xs font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add
+            </button>
+          </div>
+          {loading ? (
+            <div className="divide-y divide-[#f0ede6]">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} variant="table-row" />
+              ))}
+            </div>
+          ) : subscriptions.length === 0 ? (
+            <div className="px-5 py-8 text-center">
+              <Repeat className="w-8 h-8 text-[#d4d2cc] mx-auto mb-2" />
+              <p className="text-sm text-[#7a7974]">No subscriptions tracked yet</p>
+              <p className="text-xs text-[#7a7974] mt-0.5">Add Netflix, Spotify, or any recurring expense</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[#f0ede6]">
+              {subscriptions.map((sub) => (
+                <div key={sub.id} className="flex items-center gap-3 px-5 py-3.5 group">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-[#01696f]/10">
+                    <Repeat className="w-4 h-4 text-[#01696f]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[#28251d] truncate">{sub.name}</p>
+                    <p className="text-xs text-[#7a7974] mt-0.5">{formatRenewal(sub.renewalDate)}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-semibold text-[#a12c7b]">{formatINR(sub.amount)}</p>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveSubscription(sub.id)}
+                    className="text-[#d4d2cc] hover:text-[#a12c7b] transition-colors p-1 opacity-0 group-hover:opacity-100"
+                    title="Remove subscription"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 4. Goals at a Glance */}
         <div className="bg-white rounded-[8px] shadow-card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0ede6]">
             <h3 className="text-sm font-semibold text-[#28251d]">Goals at a Glance</h3>
@@ -640,7 +809,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* 4. Recent Transactions */}
+        {/* 5. Recent Transactions */}
         <div className="bg-white rounded-[8px] shadow-card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0ede6]">
             <h3 className="text-sm font-semibold text-[#28251d]">Recent Transactions</h3>
@@ -696,7 +865,7 @@ export function DashboardPage() {
           )}
         </div>
 
-        {/* 5. Quick Actions */}
+        {/* 6. Quick Actions */}
         <div className="flex flex-wrap gap-3">
           <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setAddTxnOpen(true)}>
             <Plus className="w-4 h-4" />
@@ -709,6 +878,10 @@ export function DashboardPage() {
           <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => setNetWorthOpen(true)}>
             <BarChart2 className="w-4 h-4" />
             Update Net Worth
+          </Button>
+          <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => setAddSubOpen(true)}>
+            <Repeat className="w-4 h-4" />
+            Add Subscription
           </Button>
         </div>
       </div>
@@ -726,6 +899,9 @@ export function DashboardPage() {
           onClose={() => setNetWorthOpen(false)}
           onSave={handleSaveNetWorth}
         />
+      )}
+      {addSubOpen && (
+        <AddSubscriptionModal onClose={() => setAddSubOpen(false)} onSave={handleAddSubscription} />
       )}
     </>
   );
