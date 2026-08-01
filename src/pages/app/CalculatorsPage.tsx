@@ -15,6 +15,7 @@ import {
   CreditCard,
   Search,
   ArrowRight,
+  Wallet,
 } from 'lucide-react';
 import { Input } from '../../components/ui';
 
@@ -154,6 +155,16 @@ const CALCULATORS: CalcCard[] = [
     title: 'Debt Payoff',
     description: 'Avalanche or Snowball — pay off debts fast',
     path: '/calculators/debt-payoff',
+    tab: 'manage',
+  },
+  {
+    id: 'monthly-budget-planner',
+    icon: Wallet,
+    iconBg: 'bg-[#01696f]/10',
+    iconColor: 'text-[#01696f]',
+    title: 'Monthly Budget Planner',
+    description: 'Plan your income, expenses, EMIs, investments, and leftover for the month.',
+    path: '/calculators/monthly-budget-planner',
     tab: 'manage',
   },
 ];

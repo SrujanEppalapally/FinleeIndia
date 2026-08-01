@@ -26,6 +26,7 @@ import { TripBudgetCalculatorPage } from './pages/app/calculators/TripBudgetCalc
 import { RentalYieldCalculatorPage } from './pages/app/calculators/RentalYieldCalculatorPage';
 import { LumpsumVsSipCalculatorPage } from './pages/app/calculators/LumpsumVsSipCalculatorPage';
 import { DebtPayoffCalculatorPage } from './pages/app/calculators/DebtPayoffCalculatorPage';
+import { MonthlyBudgetPlannerPage } from './pages/app/calculators/MonthlyBudgetPlannerPage';
 import { ProfilePage } from './pages/app/ProfilePage';
 import { CategoriesPage } from './pages/app/CategoriesPage';
 import { SettingsLayout } from './layouts/SettingsLayout';
@@ -99,6 +100,7 @@ function AppRoutes() {
               <Route path="rental-yield" element={<PageFade><RentalYieldCalculatorPage /></PageFade>} />
               <Route path="lumpsum-vs-sip" element={<PageFade><LumpsumVsSipCalculatorPage /></PageFade>} />
               <Route path="debt-payoff" element={<PageFade><DebtPayoffCalculatorPage /></PageFade>} />
+              <Route path="monthly-budget-planner" element={<PageFade><MonthlyBudgetPlannerPage /></PageFade>} />
             </Route>
             <Route path="/settings" element={<AppShell title="Settings" />}>
               <Route element={<SettingsLayout />}>

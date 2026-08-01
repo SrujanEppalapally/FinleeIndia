@@ -12,6 +12,7 @@ import {
   Settings,
   Repeat,
   Trash2,
+  CalendarClock,
 } from 'lucide-react';
 import { KPICard, Badge, Button, BudgetProgressBar, Skeleton, Input, Select } from '../../components/ui';
 import { useToast } from '../../contexts/ToastContext';
@@ -724,6 +725,15 @@ export function DashboardPage() {
                 ))}
               </div>
             )}
+            <div className="mt-5 pt-4 border-t border-[#f0ede6]">
+              <Link
+                to="/calculators/monthly-budget-planner"
+                className="flex items-center justify-center gap-2 w-full h-11 rounded-[8px] bg-[#01696f] hover:bg-[#0c4e54] text-white text-sm font-semibold transition-colors"
+              >
+                <CalendarClock className="w-4 h-4" />
+                Set or Change This Month Budget
+              </Link>
+            </div>
           </div>
         </div>
 
