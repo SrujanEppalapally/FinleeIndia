@@ -14,25 +14,14 @@ import {
   Home,
   Pill,
   Shield,
+  Repeat,
+  TrendingDown,
+  TrendingUp,
 } from 'lucide-react';
 import { Button, Input, Select, Badge, EmptyState, Skeleton } from '../../components/ui';
 import { useTopBarActions } from '../../contexts/TopBarActionsContext';
 import { useToast } from '../../contexts/ToastContext';
-
-// ── Types ──────────────────────────────────────────────────────
-
-type TxnType = 'income' | 'expense';
-
-interface Transaction {
-  id: string;
-  merchant: string;
-  category: string;
-  amount: number;
-  type: TxnType;
-  date: string;
-  account: string;
-  note: string;
-}
+import { useTransactions, type Transaction, type TxnType } from '../../hooks/useTransactions';
 
 // ── Category config ────────────────────────────────────────────
 
@@ -45,6 +34,7 @@ const categories = [
   'Healthcare',
   'Insurance',
   'EMI',
+  'Subscriptions',
   'Income',
   'Other',
 ] as const;
@@ -58,6 +48,7 @@ const categoryIcon: Record<string, React.ElementType> = {
   Healthcare: Pill,
   Insurance: Shield,
   EMI: Home,
+  Subscriptions: Repeat,
   Income: ArrowLeftRight,
   Other: ArrowLeftRight,
 };
@@ -71,6 +62,7 @@ const categoryBadgeVariant: Record<string, 'green' | 'red' | 'yellow' | 'gray' |
   Healthcare: 'teal',
   Insurance: 'gray',
   EMI: 'red',
+  Subscriptions: 'teal',
   Income: 'green',
   Other: 'gray',
 };
@@ -79,31 +71,6 @@ const categoryOptions = categories.map((c) => ({ value: c, label: c }));
 const monthOptions = [
   { value: '2026-05', label: 'May 2026' },
   { value: '2026-06', label: 'June 2026' },
-];
-
-// ── Mock data ──────────────────────────────────────────────────
-
-const MOCK_TXNS: Transaction[] = [
-  { id: '1', merchant: 'Salary Credit', category: 'Income', amount: 95000, type: 'income', date: '2026-06-01', account: 'HDFC Savings', note: 'Monthly salary' },
-  { id: '2', merchant: 'Home Loan EMI', category: 'EMI', amount: -25000, type: 'expense', date: '2026-06-05', account: 'HDFC Savings', note: 'HDFC Home Loan' },
-  { id: '3', merchant: 'Swiggy', category: 'Food', amount: -450, type: 'expense', date: '2026-06-10', account: 'SBI Credit Card', note: 'Dinner order' },
-  { id: '4', merchant: 'Airtel Recharge', category: 'Utilities', amount: -499, type: 'expense', date: '2026-06-08', account: 'HDFC Savings', note: 'Monthly plan' },
-  { id: '5', merchant: 'Amazon', category: 'Shopping', amount: -2340, type: 'expense', date: '2026-05-31', account: 'SBI Credit Card', note: 'Kitchen items' },
-  { id: '6', merchant: 'Ola', category: 'Transport', amount: -280, type: 'expense', date: '2026-05-30', account: 'PhonePe', note: 'Ride to office' },
-  { id: '7', merchant: 'BESCOM Bill', category: 'Utilities', amount: -1840, type: 'expense', date: '2026-05-30', account: 'HDFC Savings', note: 'Electricity bill May' },
-  { id: '8', merchant: 'Zomato', category: 'Food', amount: -620, type: 'expense', date: '2026-05-29', account: 'PhonePe', note: 'Weekend brunch' },
-  { id: '9', merchant: 'PVR Cinemas', category: 'Entertainment', amount: -750, type: 'expense', date: '2026-05-28', account: 'SBI Credit Card', note: 'Movie tickets' },
-  { id: '10', merchant: 'Apollo Pharmacy', category: 'Healthcare', amount: -340, type: 'expense', date: '2026-05-27', account: 'HDFC Savings', note: 'Medicines' },
-  { id: '11', merchant: 'LIC Premium', category: 'Insurance', amount: -3500, type: 'expense', date: '2026-05-25', account: 'HDFC Savings', note: 'Quarterly premium' },
-  { id: '12', merchant: 'Flipkart', category: 'Shopping', amount: -4599, type: 'expense', date: '2026-05-24', account: 'SBI Credit Card', note: 'Wireless earbuds' },
-  { id: '13', merchant: 'Uber', category: 'Transport', amount: -520, type: 'expense', date: '2026-05-23', account: 'PhonePe', note: 'Airport drop' },
-  { id: '14', merchant: 'Swiggy', category: 'Food', amount: -380, type: 'expense', date: '2026-05-22', account: 'PhonePe', note: 'Lunch' },
-  { id: '15', merchant: 'SBI Credit Card Bill', category: 'EMI', amount: -8500, type: 'expense', date: '2026-05-20', account: 'HDFC Savings', note: 'Full payment' },
-  { id: '16', merchant: 'Airtel Recharge', category: 'Utilities', amount: -499, type: 'expense', date: '2026-05-08', account: 'HDFC Savings', note: 'Monthly plan' },
-  { id: '17', merchant: 'BESCOM Bill', category: 'Utilities', amount: -1620, type: 'expense', date: '2026-05-05', account: 'HDFC Savings', note: 'Electricity bill April' },
-  { id: '18', merchant: 'Salary Credit', category: 'Income', amount: 95000, type: 'income', date: '2026-05-01', account: 'HDFC Savings', note: 'Monthly salary' },
-  { id: '19', merchant: 'Zomato', category: 'Food', amount: -290, type: 'expense', date: '2026-05-15', account: 'PhonePe', note: 'Snacks' },
-  { id: '20', merchant: 'Home Loan EMI', category: 'EMI', amount: -25000, type: 'expense', date: '2026-05-05', account: 'HDFC Savings', note: 'HDFC Home Loan' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -364,6 +331,7 @@ function TransactionDetailModal({
 
 function TransactionRow({ txn, onClick }: { txn: Transaction; onClick: () => void }) {
   const IconComp = categoryIcon[txn.category] ?? ArrowLeftRight;
+  const isRecurring = txn.recurring === true || txn.category === 'Subscriptions';
 
   return (
     <button
@@ -378,13 +346,24 @@ function TransactionRow({ txn, onClick }: { txn: Transaction; onClick: () => voi
         <IconComp className={`w-4 h-4 ${txn.type === 'income' ? 'text-[#437a22]' : 'text-[#a12c7b]'}`} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[#28251d] truncate">{txn.merchant}</p>
-        <Badge variant={categoryBadgeVariant[txn.category] ?? 'gray'} className="mt-0.5">{txn.category}</Badge>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium text-[#28251d] truncate">{txn.merchant}</p>
+          {isRecurring && (
+            <Repeat className="w-3 h-3 text-[#7a7974] flex-shrink-0" aria-label="Recurring transaction" />
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <Badge variant={categoryBadgeVariant[txn.category] ?? 'gray'}>{txn.category}</Badge>
+          <span className={`text-[10px] font-medium uppercase tracking-wide ${txn.type === 'income' ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
+            {txn.type === 'income' ? 'Income' : 'Expense'}
+          </span>
+        </div>
       </div>
       <div className="text-right flex-shrink-0">
         <p className={`text-sm font-semibold ${txn.type === 'income' ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
           {txn.type === 'income' ? '+' : '-'}{formatINR(Math.abs(txn.amount))}
         </p>
+        <p className="text-[11px] text-[#7a7974] mt-0.5">{formatDate(txn.date)}</p>
       </div>
     </button>
   );
@@ -395,8 +374,8 @@ function TransactionRow({ txn, onClick }: { txn: Transaction; onClick: () => voi
 export function TransactionsPage() {
   const { setActions } = useTopBarActions();
   const { showToast } = useToast();
+  const { data: txns, add: addTxn, update: updateTxn, remove: removeTxn } = useTransactions();
   const [loading, setLoading] = useState(true);
-  const [txns, setTxns] = useState<Transaction[]>(MOCK_TXNS);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [monthFilter, setMonthFilter] = useState('2026-05');
@@ -412,7 +391,7 @@ export function TransactionsPage() {
   // Set TopBar actions
   useEffect(() => {
     setActions(
-      <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
+      <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setAddOpen(true)} aria-label="Add transaction">
         <Plus className="w-4 h-4" />
         <span className="hidden sm:inline">Add Transaction</span>
         <span className="sm:hidden">Add</span>
@@ -444,18 +423,25 @@ export function TransactionsPage() {
 
   // Handlers
   const handleAdd = (data: Omit<Transaction, 'id'>) => {
-    const id = String(Date.now());
-    setTxns((prev) => [{ ...data, id }, ...prev]);
+    addTxn(data);
     showToast('Transaction added');
   };
 
   const handleEdit = (updated: Transaction) => {
-    setTxns((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    updateTxn(updated);
     setSelectedTxn(updated);
   };
 
   const handleDelete = (id: string) => {
-    setTxns((prev) => prev.filter((t) => t.id !== id));
+    removeTxn(id);
+    showToast('Transaction deleted');
+  };
+
+  const hasActiveFilters = search !== '' || categoryFilter !== '' || typeFilter !== 'all';
+  const handleClearFilters = () => {
+    setSearch('');
+    setCategoryFilter('');
+    setTypeFilter('all');
   };
 
   return (
@@ -464,37 +450,45 @@ export function TransactionsPage() {
       <div className="bg-white rounded-[8px] shadow-card p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Input
+            label="Search"
             placeholder="Search merchant..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             leftIcon={<Search className="w-4 h-4" />}
           />
           <Select
+            label="Category"
             options={[{ value: '', label: 'All Categories' }, ...categoryOptions]}
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             placeholder="All Categories"
           />
           <Select
+            label="Month"
             options={monthOptions}
             value={monthFilter}
             onChange={(e) => setMonthFilter(e.target.value)}
           />
-          <div className="flex rounded-[6px] border border-[#d4d2cc] overflow-hidden">
-            {(['all', 'income', 'expense'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTypeFilter(t)}
-                className={[
-                  'flex-1 py-2 text-xs font-medium transition-colors',
-                  typeFilter === t
-                    ? 'bg-[#01696f] text-white'
-                    : 'bg-white text-[#7a7974] hover:bg-[#f7f6f2]',
-                ].join(' ')}
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-[#28251d]">Type</span>
+            <div className="flex rounded-[6px] border border-[#d4d2cc] overflow-hidden" role="group" aria-label="Filter by transaction type">
+              {(['all', 'income', 'expense'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTypeFilter(t)}
+                  aria-pressed={typeFilter === t}
+                  aria-label={`Filter by ${t === 'all' ? 'all types' : t}`}
+                  className={[
+                    'flex-1 py-2 text-xs font-medium transition-colors',
+                    typeFilter === t
+                      ? 'bg-[#01696f] text-white'
+                      : 'bg-white text-[#7a7974] hover:bg-[#f7f6f2]',
+                  ].join(' ')}
+                >
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -502,11 +496,17 @@ export function TransactionsPage() {
       {/* Summary strip */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-[8px] shadow-card p-4 text-center">
-          <p className="text-xs text-[#7a7974] font-medium mb-1">Total Income</p>
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <TrendingUp className="w-3.5 h-3.5 text-[#437a22]" />
+            <p className="text-xs text-[#7a7974] font-medium">Income</p>
+          </div>
           <p className="text-base font-bold text-[#437a22]">{formatINR(totalIncome)}</p>
         </div>
         <div className="bg-white rounded-[8px] shadow-card p-4 text-center">
-          <p className="text-xs text-[#7a7974] font-medium mb-1">Total Expenses</p>
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <TrendingDown className="w-3.5 h-3.5 text-[#a12c7b]" />
+            <p className="text-xs text-[#7a7974] font-medium">Expenses</p>
+          </div>
           <p className="text-base font-bold text-[#a12c7b]">{formatINR(totalExpense)}</p>
         </div>
         <div className="bg-white rounded-[8px] shadow-card p-4 text-center">
@@ -528,9 +528,9 @@ export function TransactionsPage() {
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<ArrowLeftRight className="w-10 h-10" />}
-            title="No transactions found"
+            title="No transactions found for these filters."
             description="Try adjusting your filters or add a new transaction."
-            action={{ label: 'Add Transaction', onClick: () => setAddOpen(true) }}
+            action={hasActiveFilters ? { label: 'Clear Filters', onClick: handleClearFilters } : { label: 'Add Transaction', onClick: () => setAddOpen(true) }}
           />
         ) : (
           grouped.map((group) => (

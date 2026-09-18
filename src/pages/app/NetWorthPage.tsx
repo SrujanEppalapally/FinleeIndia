@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import {
   Plus, Pencil, X, Trash2, Landmark, PiggyBank, TrendingUp,
   BarChart3, Briefcase, CircleDollarSign, Home, Car, CreditCard,
-  HelpCircle, ChevronDown, ChevronUp,
+  HelpCircle, ChevronDown, ChevronUp, Calendar, Info,
 } from 'lucide-react';
 import { Button, Input, Select, EmptyState } from '../../components/ui';
 import { useTopBarActions } from '../../contexts/TopBarActionsContext';
+import { useToast } from '../../contexts/ToastContext';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ReferenceLine, ResponsiveContainer,
+  ReferenceLine, ResponsiveContainer, Legend,
 } from 'recharts';
 
 // ── Types ──────────────────────────────────────────────────────
@@ -24,20 +25,40 @@ interface NetWorthItem {
   category: AssetCategory | LiabilityCategory;
   type: ItemType;
   investmentSubcategory?: string;
+  lastUpdated?: string;
 }
 
 // ── Mock data ──────────────────────────────────────────────────
 
+const AS_OF_DATE = '18 September 2026';
+const LAST_UPDATED = '18 Sep 2026, 10:30 AM';
+
 const INITIAL_ITEMS: NetWorthItem[] = [
-  { id: 'a1', name: 'SBI Savings Account', value: 185000, category: 'savings', type: 'asset' },
-  { id: 'a2', name: 'HDFC FD', value: 300000, category: 'savings', type: 'asset' },
-  { id: 'a3', name: 'Zerodha Portfolio', value: 420000, category: 'investment', type: 'asset', investmentSubcategory: 'Stocks / Equity' },
-  { id: 'a4', name: 'Zerodha MF', value: 560000, category: 'investment', type: 'asset', investmentSubcategory: 'Mutual Funds' },
-  { id: 'a5', name: 'EPF Balance', value: 380000, category: 'epf', type: 'asset' },
-  { id: 'a6', name: 'Gold (50g)', value: 375000, category: 'gold', type: 'asset' },
-  { id: 'l1', name: 'Home Loan Outstanding', value: 2850000, category: 'home-loan', type: 'liability' },
-  { id: 'l2', name: 'Car Loan Outstanding', value: 320000, category: 'car-loan', type: 'liability' },
-  { id: 'l3', name: 'Credit Card Outstanding', value: 0, category: 'credit-card', type: 'liability' },
+  { id: 'a1', name: 'SBI Savings Account', value: 185000, category: 'savings', type: 'asset', lastUpdated: '15 Sep 2026' },
+  { id: 'a2', name: 'HDFC FD', value: 300000, category: 'savings', type: 'asset', lastUpdated: '10 Sep 2026' },
+  { id: 'a3', name: 'Zerodha Portfolio', value: 420000, category: 'investment', type: 'asset', investmentSubcategory: 'Stocks / Equity', lastUpdated: '17 Sep 2026' },
+  { id: 'a4', name: 'Zerodha MF', value: 560000, category: 'investment', type: 'asset', investmentSubcategory: 'Mutual Funds', lastUpdated: '17 Sep 2026' },
+  { id: 'a5', name: 'EPF Balance', value: 380000, category: 'epf', type: 'asset', lastUpdated: '01 Sep 2026' },
+  { id: 'a6', name: 'Gold (50g)', value: 375000, category: 'gold', type: 'asset', lastUpdated: '05 Sep 2026' },
+  { id: 'l1', name: 'Home Loan Outstanding', value: 2850000, category: 'home-loan', type: 'liability', lastUpdated: '12 Sep 2026' },
+  { id: 'l2', name: 'Car Loan Outstanding', value: 320000, category: 'car-loan', type: 'liability', lastUpdated: '12 Sep 2026' },
+  { id: 'l3', name: 'Credit Card Outstanding', value: 0, category: 'credit-card', type: 'liability', lastUpdated: '17 Sep 2026' },
+];
+
+// Sample 12-month trend (mock). Clearly marked as sample where shown.
+const TREND_DATA = [
+  { month: 'Oct', assets: 1850000, liabilities: 3270000, netWorth: -1420000 },
+  { month: 'Nov', assets: 1920000, liabilities: 3240000, netWorth: -1320000 },
+  { month: 'Dec', assets: 2010000, liabilities: 3210000, netWorth: -1200000 },
+  { month: 'Jan', assets: 2100000, liabilities: 3190000, netWorth: -1090000 },
+  { month: 'Feb', assets: 2180000, liabilities: 3160000, netWorth: -980000 },
+  { month: 'Mar', assets: 2240000, liabilities: 3130000, netWorth: -890000 },
+  { month: 'Apr', assets: 2310000, liabilities: 3100000, netWorth: -790000 },
+  { month: 'May', assets: 2380000, liabilities: 3070000, netWorth: -690000 },
+  { month: 'Jun', assets: 2420000, liabilities: 3220000, netWorth: -800000 },
+  { month: 'Jul', assets: 2480000, liabilities: 3190000, netWorth: -710000 },
+  { month: 'Aug', assets: 2540000, liabilities: 3170000, netWorth: -630000 },
+  { month: 'Sep', assets: 2220000, liabilities: 3170000, netWorth: -950000 },
 ];
 
 // ── Config ─────────────────────────────────────────────────────
@@ -63,7 +84,7 @@ const investmentSubcategoryOptions = [
   { value: 'Bonds', label: 'Bonds' },
   { value: 'Debt Funds', label: 'Debt Funds' },
   { value: 'ETFs', label: 'ETFs' },
-  { value: 'Fixed Deposit', label: 'Fixed Deposit' },
+  { value: 'Fixed Deposits', label: 'Fixed Deposits' },
   { value: 'PPF / EPF', label: 'PPF / EPF' },
   { value: 'NPS', label: 'NPS' },
   { value: 'Crypto', label: 'Crypto' },
@@ -80,6 +101,18 @@ const categoryIcon: Record<string, React.ElementType> = {
   'car-loan': Car,
   'credit-card': CreditCard,
   other: HelpCircle,
+};
+
+const categoryLabel: Record<string, string> = {
+  savings: 'Savings / FD',
+  investment: 'Investments',
+  property: 'Property',
+  gold: 'Gold',
+  epf: 'EPF / PF',
+  'home-loan': 'Home Loan',
+  'car-loan': 'Car Loan',
+  'credit-card': 'Credit Card',
+  other: 'Other',
 };
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -148,6 +181,7 @@ function ItemModal({
       category: category as AssetCategory | LiabilityCategory,
       type: state.type,
       investmentSubcategory: showInvestmentSub ? investmentSub : undefined,
+      lastUpdated: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
     });
     onClose();
   };
@@ -168,7 +202,7 @@ function ItemModal({
             <h3 className="text-base font-semibold text-[#28251d]">
               {isEdit ? `Edit ${typeLabel}` : `Add ${typeLabel}`}
             </h3>
-            <button onClick={onClose} className="text-[#7a7974] hover:text-[#28251d]">
+            <button onClick={onClose} className="text-[#7a7974] hover:text-[#28251d]" aria-label="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -270,9 +304,21 @@ function ItemRow({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-[#28251d] truncate">{item.name}</p>
-        {item.investmentSubcategory && (
-          <p className="text-[11px] text-[#7a7974] mt-0.5">{item.investmentSubcategory}</p>
-        )}
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <span className="text-[11px] text-[#7a7974]">{categoryLabel[item.category] ?? item.category}</span>
+          {item.investmentSubcategory && (
+            <>
+              <span className="text-[11px] text-[#d4d2cc]">·</span>
+              <span className="text-[11px] text-[#7a7974]">{item.investmentSubcategory}</span>
+            </>
+          )}
+          {item.lastUpdated && (
+            <>
+              <span className="text-[11px] text-[#d4d2cc] hidden sm:inline">·</span>
+              <span className="text-[11px] text-[#7a7974] hidden sm:inline">Updated {item.lastUpdated}</span>
+            </>
+          )}
+        </div>
       </div>
       <span className={`text-sm font-semibold flex-shrink-0 ${isAsset ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
         {formatINR(item.value)}
@@ -280,6 +326,7 @@ function ItemRow({
       <button
         onClick={() => onEdit(item)}
         className="ml-1 text-[#d4d2cc] hover:text-[#01696f] transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+        aria-label={`Edit ${item.name}`}
       >
         <Pencil className="w-3.5 h-3.5" />
       </button>
@@ -287,7 +334,64 @@ function ItemRow({
   );
 }
 
-// ── Projection Chart Tooltip ───────────────────────────────────
+// ── Trend Chart Tooltip ─────────────────────────────────────────
+
+function TrendTip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string | number }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-[#e9e7e1] rounded-[6px] shadow-card px-3 py-2 text-xs">
+      <p className="font-semibold text-[#28251d] mb-1.5">{label}</p>
+      {payload.map((p) => (
+        <div key={p.name} className="flex items-center gap-2 mb-0.5">
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+          <span className="text-[#7a7974]">{p.name}:</span>
+          <span className="font-medium text-[#28251d]">{formatINR(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Trend Section ──────────────────────────────────────────────
+
+function TrendSection() {
+  return (
+    <div className="bg-white rounded-[8px] shadow-card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-[#28251d]">Net Worth Trend</h3>
+        <span className="text-[11px] text-[#7a7974] bg-[#f7f6f2] rounded-full px-2 py-0.5">Sample data</span>
+      </div>
+      <ResponsiveContainer width="100%" height={260}>
+        <AreaChart data={TREND_DATA} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
+          <defs>
+            <linearGradient id="trendAssets" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#437a22" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#437a22" stopOpacity={0.03} />
+            </linearGradient>
+            <linearGradient id="trendLiab" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#a12c7b" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#a12c7b" stopOpacity={0.03} />
+            </linearGradient>
+            <linearGradient id="trendNW" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#01696f" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#01696f" stopOpacity={0.05} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0ede6" />
+          <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#7a7974' }} axisLine={{ stroke: '#e9e7e1' }} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: '#7a7974' }} axisLine={false} tickLine={false} tickFormatter={fmtY} width={48} />
+          <Tooltip content={<TrendTip />} />
+          <Legend wrapperStyle={{ fontSize: 11, color: '#7a7974', paddingTop: 12 }} iconType="circle" iconSize={8} />
+          <Area type="monotone" dataKey="assets" name="Total Assets" stroke="#437a22" strokeWidth={2} fill="url(#trendAssets)" dot={false} activeDot={{ r: 4 }} />
+          <Area type="monotone" dataKey="liabilities" name="Total Liabilities" stroke="#a12c7b" strokeWidth={2} fill="url(#trendLiab)" dot={false} activeDot={{ r: 4 }} />
+          <Area type="monotone" dataKey="netWorth" name="Net Worth" stroke="#01696f" strokeWidth={2.5} fill="url(#trendNW)" dot={false} activeDot={{ r: 5 }} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ── Projection Chart Tooltip ────────────────────────────────────
 
 function ProjTip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number }>; label?: string | number }) {
   if (!active || !payload?.length) return null;
@@ -328,7 +432,6 @@ function ProjectionSection({ totalAssets, totalLiabilities }: { totalAssets: num
         additional: Math.round(additionalCorpus),
       });
       existingCorpus = existingCorpus * (1 + r);
-      // Annual value of monthly SIP growing at return rate
       const annualSip = monthly * 12;
       additionalCorpus = (additionalCorpus + annualSip) * (1 + r);
     }
@@ -340,6 +443,7 @@ function ProjectionSection({ totalAssets, totalLiabilities }: { totalAssets: num
       <button
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#f7f6f2] transition-colors"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
       >
         <span className="text-sm font-semibold text-[#28251d]">Future Net Worth Projection</span>
         {open
@@ -350,7 +454,6 @@ function ProjectionSection({ totalAssets, totalLiabilities }: { totalAssets: num
 
       {open && (
         <div className="border-t border-[#f0ede6] p-5 space-y-5">
-          {/* Inline inputs */}
           <div className="flex flex-wrap gap-3 items-end">
             <div className="flex flex-col gap-1 min-w-[130px] flex-1">
               <label className="text-xs font-medium text-[#7a7974]">Annual Return (%)</label>
@@ -453,14 +556,76 @@ function ProjectionSection({ totalAssets, totalLiabilities }: { totalAssets: num
   );
 }
 
+// ── Benchmark Card ─────────────────────────────────────────────
+
+function BenchmarkCard({
+  netWorth, benchmarkTarget, benchmarkGap, ageNum, incomeNum,
+}: {
+  netWorth: number;
+  benchmarkTarget: number;
+  benchmarkGap: number;
+  ageNum: number;
+  incomeNum: number;
+}) {
+  const [showInfo, setShowInfo] = useState(false);
+
+  if (benchmarkTarget <= 0) return null;
+
+  const met = netWorth >= benchmarkTarget;
+  const smallGap = !met && benchmarkGap <= benchmarkTarget * 0.15;
+  const level: 'good' | 'warn' | 'critical' = met ? 'good' : smallGap ? 'warn' : 'critical';
+
+  const styles = {
+    good: { bg: 'bg-[#437a22]/8 border-[#437a22]/20', text: 'text-[#437a22]', icon: '✓' },
+    warn: { bg: 'bg-[#b45309]/8 border-[#b45309]/20', text: 'text-[#b45309]', icon: '↑' },
+    critical: { bg: 'bg-[#a12c7b]/8 border-[#a12c7b]/20', text: 'text-[#a12c7b]', icon: '↑' },
+  }[level];
+
+  return (
+    <div className={`rounded-[6px] px-4 py-3 mb-5 border ${styles.bg}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <p className="text-xs font-semibold text-[#28251d]">
+            Suggested net worth benchmark: <span className={styles.text}>{formatINR(benchmarkTarget)}</span>
+          </p>
+          <p className={`text-[11px] mt-0.5 ${styles.text}`}>
+            {met
+              ? `You are ${formatINR(benchmarkGap)} above the benchmark.`
+              : `You are ${formatINR(benchmarkGap)} below the benchmark.`}
+          </p>
+          <p className="text-[11px] text-[#7a7974] mt-1">
+            Age used: {ageNum} · Annual income used: {formatINR(incomeNum)}
+          </p>
+        </div>
+        <span className={`text-lg flex-shrink-0 ${styles.text}`}>{styles.icon}</span>
+      </div>
+      <div className="mt-2">
+        <button
+          onClick={() => setShowInfo((v) => !v)}
+          className="flex items-center gap-1 text-[11px] font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors"
+          aria-expanded={showInfo}
+        >
+          <Info className="w-3 h-3" />
+          How is this calculated?
+        </button>
+        {showInfo && (
+          <p className="text-[11px] text-[#7a7974] mt-1.5 leading-relaxed bg-[#f7f6f2] rounded-[6px] px-3 py-2">
+            This is a planning guideline based on the current benchmark formula used by Finlee. It is not a guaranteed financial target or personalised financial advice.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────
 
 export function NetWorthPage() {
   const { setActions } = useTopBarActions();
+  const { showToast } = useToast();
   const [items, setItems] = useState<NetWorthItem[]>(INITIAL_ITEMS);
   const [modal, setModal] = useState<ModalState | null>(null);
 
-  // Addition 2 — income + age for benchmark
   const [annualIncome, setAnnualIncome] = useState('1200000');
   const [userAge, setUserAge] = useState('30');
 
@@ -471,15 +636,9 @@ export function NetWorthPage() {
   const netWorth = totalAssets - totalLiabilities;
   const isPositive = netWorth >= 0;
 
-  const assetPct = totalAssets + totalLiabilities > 0
-    ? (totalAssets / (totalAssets + totalLiabilities)) * 100
-    : 50;
-
-  // Benchmark: (age - 25) × income / 10
   const incomeNum = parseFloat(annualIncome) || 0;
   const ageNum = parseInt(userAge, 10) || 0;
   const benchmarkTarget = ageNum > 25 ? ((ageNum - 25) * incomeNum) / 10 : 0;
-  const benchmarkMet = netWorth >= benchmarkTarget;
   const benchmarkGap = Math.abs(netWorth - benchmarkTarget);
 
   useEffect(() => {
@@ -503,17 +662,19 @@ export function NetWorthPage() {
       const exists = prev.find((i) => i.id === item.id);
       return exists ? prev.map((i) => (i.id === item.id ? item : i)) : [...prev, item];
     });
+    showToast('Net worth updated successfully');
   };
 
   const handleDelete = (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
+    showToast('Net worth updated successfully');
   };
 
   return (
     <>
       <div className="space-y-5">
 
-        {/* Addition 2 — Income input strip */}
+        {/* Income input strip */}
         <div className="flex flex-wrap items-center gap-4 bg-white rounded-[8px] shadow-card px-5 py-3">
           <div className="flex items-center gap-3 flex-1 min-w-[220px]">
             <div className="flex flex-col gap-0.5 flex-1">
@@ -540,62 +701,95 @@ export function NetWorthPage() {
 
         {/* Hero */}
         <div className="bg-white rounded-[8px] shadow-card p-6">
-          <div className="text-center mb-5">
-            <p className="text-sm text-[#7a7974] mb-1">Net Worth</p>
-            <p className={`text-4xl font-bold tracking-tight ${isPositive ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
-              {isPositive ? '' : '-'}{formatINR(Math.abs(netWorth))}
-            </p>
-            <p className="text-sm text-[#7a7974] mt-2">As of June 2026</p>
+          {/* Summary row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+            <div>
+              <p className="text-xs text-[#7a7974] font-medium">Current Net Worth</p>
+              <p className={`text-xl font-bold mt-1 ${isPositive ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
+                {isPositive ? '' : '-'}{formatINR(Math.abs(netWorth))}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-[#7a7974] font-medium">Total Assets</p>
+              <p className="text-xl font-bold text-[#437a22] mt-1">{formatINR(totalAssets)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#7a7974] font-medium">Total Liabilities</p>
+              <p className="text-xl font-bold text-[#a12c7b] mt-1">{formatINR(totalLiabilities)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#7a7974] font-medium">As of</p>
+              <p className="text-sm font-semibold text-[#28251d] mt-1">{AS_OF_DATE}</p>
+              <p className="text-[11px] text-[#7a7974] mt-0.5 flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                Updated {LAST_UPDATED}
+              </p>
+            </div>
           </div>
 
-          {/* Benchmark line */}
-          {benchmarkTarget > 0 && (
-            <div className={`flex items-center justify-between rounded-[6px] px-4 py-2.5 mb-5 ${benchmarkMet ? 'bg-[#437a22]/8 border border-[#437a22]/20' : 'bg-[#a12c7b]/8 border border-[#a12c7b]/20'}`}>
-              <div>
-                <p className={`text-xs font-semibold ${benchmarkMet ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
-                  Target net worth at your age: {formatINR(benchmarkTarget)}
-                </p>
-                <p className={`text-[11px] mt-0.5 ${benchmarkMet ? 'text-[#437a22]/70' : 'text-[#a12c7b]/70'}`}>
-                  {benchmarkMet
-                    ? `You're ${formatINR(benchmarkGap)} ahead of benchmark`
-                    : `${formatINR(benchmarkGap)} below benchmark`
-                  }
-                </p>
-              </div>
-              <span className={`text-lg ${benchmarkMet ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
-                {benchmarkMet ? '✓' : '↑'}
-              </span>
-            </div>
-          )}
+          {/* Net worth status explanation */}
+          <div className={`rounded-[6px] px-4 py-2.5 mb-5 ${isPositive ? 'bg-[#437a22]/8' : 'bg-[#a12c7b]/8'}`}>
+            <p className={`text-xs font-medium ${isPositive ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
+              {isPositive
+                ? 'Your assets currently exceed your liabilities.'
+                : 'Your liabilities are currently higher than your assets.'}
+            </p>
+          </div>
 
-          {/* Split bar */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-[#7a7974]">
-              <span>Assets {formatINR(totalAssets)}</span>
-              <span>Liabilities {formatINR(totalLiabilities)}</span>
-            </div>
-            <div className="h-3 bg-[#f0ede6] rounded-full overflow-hidden flex">
-              <div
-                className="h-full bg-[#437a22] rounded-l-full transition-all duration-700"
-                style={{ width: `${assetPct}%` }}
-              />
-              <div
-                className="h-full bg-[#a12c7b] rounded-r-full transition-all duration-700"
-                style={{ width: `${100 - assetPct}%` }}
-              />
-            </div>
-            <div className="flex items-center gap-4 justify-center">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#437a22] flex-shrink-0" />
-                <span className="text-xs text-[#7a7974]">Assets</span>
+          {/* Benchmark card */}
+          <BenchmarkCard
+            netWorth={netWorth}
+            benchmarkTarget={benchmarkTarget}
+            benchmarkGap={benchmarkGap}
+            ageNum={ageNum}
+            incomeNum={incomeNum}
+          />
+
+          {/* Comparison layout: Assets vs Liabilities vs Net Worth */}
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-[#7a7974] font-medium">Assets</span>
+                <span className="text-[#437a22] font-semibold">{formatINR(totalAssets)}</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#a12c7b] flex-shrink-0" />
-                <span className="text-xs text-[#7a7974]">Liabilities</span>
+              <div className="h-3 bg-[#f0ede6] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#437a22] rounded-full transition-all duration-700"
+                  style={{ width: totalAssets > 0 ? '100%' : '0%' }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-[#7a7974] font-medium">Liabilities</span>
+                <span className="text-[#a12c7b] font-semibold">{formatINR(totalLiabilities)}</span>
+              </div>
+              <div className="h-3 bg-[#f0ede6] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#a12c7b] rounded-full transition-all duration-700"
+                  style={{ width: totalLiabilities > 0 ? '100%' : '0%' }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-[#7a7974] font-medium">Net Worth</span>
+                <span className={`font-semibold ${isPositive ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
+                  {isPositive ? '' : '-'}{formatINR(Math.abs(netWorth))}
+                </span>
+              </div>
+              <div className="h-3 bg-[#f0ede6] rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${isPositive ? 'bg-[#01696f]' : 'bg-[#a12c7b]'}`}
+                  style={{ width: netWorth !== 0 ? '100%' : '0%' }}
+                />
               </div>
             </div>
           </div>
         </div>
+
+        {/* Trend chart */}
+        <TrendSection />
 
         {/* Assets & Liabilities columns */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -612,8 +806,8 @@ export function NetWorthPage() {
               {assets.length === 0 ? (
                 <EmptyState
                   icon={<PiggyBank className="w-8 h-8" />}
-                  title="No assets yet"
-                  description="Add your savings, investments, and property."
+                  title="No assets added yet"
+                  description="Add savings, investments, and property to see your net worth."
                   className="py-8"
                 />
               ) : (
@@ -654,8 +848,9 @@ export function NetWorthPage() {
               {liabilities.length === 0 ? (
                 <EmptyState
                   icon={<CreditCard className="w-8 h-8" />}
-                  title="No liabilities yet"
-                  description="Add loans and credit card balances."
+                  title="No liabilities added yet"
+                  description="Add loans or outstanding balances to see your complete net worth."
+                  action={{ label: 'Add Liability', onClick: () => setModal({ open: true, type: 'liability' }) }}
                   className="py-8"
                 />
               ) : (
@@ -684,7 +879,7 @@ export function NetWorthPage() {
           </div>
         </div>
 
-        {/* Addition 3 — Projection */}
+        {/* Projection */}
         <ProjectionSection totalAssets={totalAssets} totalLiabilities={totalLiabilities} />
       </div>
 

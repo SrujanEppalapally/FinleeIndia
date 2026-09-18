@@ -163,7 +163,7 @@ const CALCULATORS: CalcCard[] = [
     iconBg: 'bg-[#01696f]/10',
     iconColor: 'text-[#01696f]',
     title: 'Monthly Budget Planner',
-    description: 'Plan your income, expenses, EMIs, investments, and leftover for the month.',
+    description: 'Plan your income, expenses, EMIs, investments, and monthly leftover.',
     path: '/calculators/monthly-budget-planner',
     tab: 'manage',
   },

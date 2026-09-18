@@ -83,7 +83,7 @@ export function ProfilePage() {
 
   return (
     <>
-      <div className="space-y-5">
+      <div className="mx-auto w-full max-w-2xl space-y-5">
         {/* Avatar section */}
         <div className="bg-white rounded-[8px] shadow-card p-6 flex flex-col items-center gap-3">
           <div className="w-20 h-20 rounded-full bg-[#01696f] flex items-center justify-center">

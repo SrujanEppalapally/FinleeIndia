@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Wallet,
@@ -13,10 +13,14 @@ import {
   Repeat,
   Trash2,
   CalendarClock,
+  ArrowRight,
+  AlertCircle,
+  Lightbulb,
 } from 'lucide-react';
 import { KPICard, Badge, Button, BudgetProgressBar, Skeleton, Input, Select } from '../../components/ui';
 import { useToast } from '../../contexts/ToastContext';
 import { useTopBarActions } from '../../contexts/TopBarActionsContext';
+import { useTransactions, type Transaction } from '../../hooks/useTransactions';
 import {
   PieChart,
   Pie,
@@ -25,20 +29,28 @@ import {
   Tooltip,
 } from 'recharts';
 
-// ── Mock Data ──────────────────────────────────────────────────
+// ── Constants ───────────────────────────────────────────────────
 
-const MONTHLY_INCOME = 95000;
-const SAVINGS_RATE = 55.5;
 const BUDGET_TOTAL = 63000;
 
-const spendingByCategory = [
-  { name: 'Food', value: 8200, color: '#01696f' },
-  { name: 'Transport', value: 5100, color: '#2a9da1' },
-  { name: 'Shopping', value: 12400, color: '#a12c7b' },
-  { name: 'Utilities', value: 3800, color: '#b45309' },
-  { name: 'Entertainment', value: 4200, color: '#437a22' },
-  { name: 'Other', value: 8600, color: '#7a7974' },
+const MONTH_OPTIONS = [
+  { value: '2026-05', label: 'May 2026' },
+  { value: '2026-06', label: 'June 2026' },
 ];
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Food: '#01696f',
+  Transport: '#2a9da1',
+  Shopping: '#a12c7b',
+  Utilities: '#b45309',
+  Entertainment: '#437a22',
+  Other: '#7a7974',
+  Healthcare: '#0e7490',
+  Insurance: '#6b7280',
+  EMI: '#a12c7b',
+  Income: '#437a22',
+  Subscriptions: '#01696f',
+};
 
 const INITIAL_BUDGET_ITEMS = [
   { category: 'Food', spent: 8200, limit: 10000 },
@@ -50,22 +62,6 @@ const INITIAL_BUDGET_ITEMS = [
 ];
 
 type TxnType = 'income' | 'expense';
-
-interface Transaction {
-  merchant: string;
-  category: string;
-  amount: number;
-  type: TxnType;
-  date: string;
-}
-
-const INITIAL_TRANSACTIONS: Transaction[] = [
-  { merchant: 'Swiggy', category: 'Food', amount: -450, type: 'expense', date: 'Today' },
-  { merchant: 'Salary Credit', category: 'Income', amount: 95000, type: 'income', date: '1 Jun' },
-  { merchant: 'Amazon', category: 'Shopping', amount: -2340, type: 'expense', date: '31 May' },
-  { merchant: 'BESCOM Bill', category: 'Utilities', amount: -1840, type: 'expense', date: '30 May' },
-  { merchant: 'Ola', category: 'Transport', amount: -280, type: 'expense', date: '30 May' },
-];
 
 const INITIAL_NET_WORTH_ITEMS = [
   { id: 'a1', name: 'SBI Savings Account', value: 185000, type: 'asset' as const },
@@ -87,11 +83,15 @@ const categoryBadgeVariant: Record<string, 'green' | 'red' | 'yellow' | 'gray' |
   Entertainment: 'green',
   Income: 'green',
   Other: 'gray',
+  Subscriptions: 'teal',
+  Healthcare: 'teal',
+  Insurance: 'gray',
+  EMI: 'red',
 };
 
 const TXN_CATEGORIES = [
   'Food', 'Transport', 'Shopping', 'Utilities',
-  'Entertainment', 'Healthcare', 'Insurance', 'EMI', 'Income', 'Other',
+  'Entertainment', 'Healthcare', 'Insurance', 'EMI', 'Subscriptions', 'Income', 'Other',
 ];
 
 const BUDGET_CATEGORIES = [
@@ -102,7 +102,7 @@ interface Subscription {
   id: string;
   name: string;
   amount: number;
-  renewalDate: string; // ISO date (YYYY-MM-DD)
+  renewalDate: string;
 }
 
 const INITIAL_SUBSCRIPTIONS: Subscription[] = [
@@ -132,6 +132,12 @@ function formatINR(amount: number): string {
   return `₹${abs.toLocaleString('en-IN')}`;
 }
 
+function formatDateShort(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
 function computeNetWorth(items: typeof INITIAL_NET_WORTH_ITEMS): number {
   const assets = items.filter((i) => i.type === 'asset').reduce((s, i) => s + i.value, 0);
   const liabilities = items.filter((i) => i.type === 'liability').reduce((s, i) => s + i.value, 0);
@@ -140,16 +146,38 @@ function computeNetWorth(items: typeof INITIAL_NET_WORTH_ITEMS): number {
 
 // ── Donut Tooltip ──────────────────────────────────────────────
 
-function DonutTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { color: string } }> }) {
+function DonutTooltip({ active, payload, totalExpenses }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { color: string } }>; totalExpenses: number }) {
   if (!active || !payload?.length) return null;
   const item = payload[0];
+  const pct = totalExpenses > 0 ? ((item.value / totalExpenses) * 100).toFixed(1) : '0';
   return (
     <div className="bg-white border border-[#e9e7e1] rounded-[8px] shadow-card-md px-3 py-2 text-sm">
       <div className="flex items-center gap-2">
         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.payload.color }} />
         <span className="text-[#28251d] font-medium">{item.name}</span>
       </div>
-      <p className="text-[#7a7974] mt-0.5 ml-[18px]">{formatINR(item.value)}</p>
+      <p className="text-[#7a7974] mt-0.5 ml-[18px]">{formatINR(item.value)} · {pct}%</p>
+    </div>
+  );
+}
+
+// ── Savings Rate Card ──────────────────────────────────────────
+
+function SavingsRateCard({ rate, surplus, loading }: { rate: number | null; surplus: number; loading: boolean }) {
+  if (loading) {
+    return <Skeleton variant="card" />;
+  }
+  const display = rate === null ? 'No income data' : `${rate.toFixed(1)}%`;
+  return (
+    <div className="bg-white rounded-[8px] shadow-card p-5 flex flex-col gap-3 relative">
+      <span className="absolute top-4 right-4 text-[#7a7974] w-5 h-5 flex items-center justify-center opacity-60">
+        <PiggyBank className="w-5 h-5" />
+      </span>
+      <p className="text-sm text-[#7a7974] font-medium pr-8">Savings Rate</p>
+      <span className="text-2xl font-bold text-[#28251d] leading-tight">{display}</span>
+      <div className="flex items-center gap-1 text-xs font-medium text-[#7a7974]">
+        <span>{formatINR(surplus)} surplus this month</span>
+      </div>
     </div>
   );
 }
@@ -162,15 +190,18 @@ interface GoalSummary {
   id: string;
   emoji: string;
   name: string;
+  saved: number;
+  target: number;
   pct: number;
   status: GoalStatus;
   targetDate: string;
+  monthlyContribution: number;
 }
 
 const GOAL_SUMMARIES: GoalSummary[] = [
-  { id: '1', emoji: '🏠', name: 'Dream House', pct: 13, status: 'at-risk',  targetDate: 'Dec 2031' },
-  { id: '2', emoji: '🚗', name: 'Dream Car',   pct: 27, status: 'on-track', targetDate: 'Jun 2028' },
-  { id: '3', emoji: '🏖️', name: 'Europe Trip', pct: 40, status: 'on-track', targetDate: 'Mar 2027' },
+  { id: '1', emoji: '🏠', name: 'Dream House', saved: 130000, target: 1000000, pct: 13, status: 'at-risk',  targetDate: 'Dec 2031', monthlyContribution: 8500 },
+  { id: '2', emoji: '🚗', name: 'Dream Car',   saved: 135000, target: 500000, pct: 27, status: 'on-track', targetDate: 'Jun 2028', monthlyContribution: 6200 },
+  { id: '3', emoji: '🏖️', name: 'Europe Trip', saved: 80000,  target: 200000, pct: 40, status: 'on-track', targetDate: 'Mar 2027', monthlyContribution: 4200 },
 ];
 
 const GOAL_STATUS_BADGE: Record<GoalStatus, { label: string; classes: string }> = {
@@ -182,24 +213,42 @@ const GOAL_STATUS_BADGE: Record<GoalStatus, { label: string; classes: string }> 
 function GoalSummaryRow({ goal }: { goal: GoalSummary }) {
   const { label, classes } = GOAL_STATUS_BADGE[goal.status];
   return (
-    <div className="flex items-center gap-3 py-3 px-5">
-      <span className="text-lg select-none flex-shrink-0 w-7 text-center">{goal.emoji}</span>
-      <div className="flex-1 min-w-0 space-y-1.5">
-        <p className="text-sm font-medium text-[#28251d] truncate">{goal.name}</p>
-        <div className="h-1 bg-[#f0ede6] rounded-full overflow-hidden">
-          <div
-            className="h-full bg-[#01696f] rounded-full transition-all duration-500"
-            style={{ width: `${goal.pct}%` }}
-          />
+    <div className="py-3 px-5">
+      <div className="flex items-center gap-3">
+        <span className="text-lg select-none flex-shrink-0 w-7 text-center">{goal.emoji}</span>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-[#28251d] truncate">{goal.name}</p>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${classes}`}>
+              {label}
+            </span>
+          </div>
+          <div className="h-1 bg-[#f0ede6] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#01696f] rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(goal.pct, 100)}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-xs text-[#7a7974]">
+            <span>{formatINR(goal.saved)} / {formatINR(goal.target)}</span>
+            <span className="font-semibold text-[#01696f]">{goal.pct}%</span>
+          </div>
+          <div className="flex items-center justify-between text-xs text-[#7a7974]">
+            <span>Target: {goal.targetDate}</span>
+            <span>Monthly: {formatINR(goal.monthlyContribution)}</span>
+          </div>
         </div>
       </div>
-      <span className="text-xs font-semibold text-[#01696f] flex-shrink-0 w-8 text-right">
-        {goal.pct}%
-      </span>
-      <span className={`hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${classes}`}>
-        {label}
-      </span>
-      <span className="text-xs text-[#7a7974] flex-shrink-0 w-16 text-right">{goal.targetDate}</span>
+      {goal.status === 'at-risk' && (
+        <div className="mt-2 ml-10">
+          <Link
+            to={`/goals/${goal.id}`}
+            className="inline-flex items-center gap-1 text-xs font-medium text-[#b45309] hover:text-[#8a3f08] transition-colors"
+          >
+            Adjust plan <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -451,6 +500,7 @@ function QuickNetWorthModal({
                 onClick={addNew}
                 className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-[6px] border border-[#01696f] text-[#01696f] hover:bg-[#01696f]/8 transition-colors"
                 title="Add item"
+                aria-label="Add item"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -548,7 +598,9 @@ function AddSubscriptionModal({
 export function DashboardPage() {
   const { showToast } = useToast();
   const { setActions } = useTopBarActions();
+  const { data: allTxns, add: addTxnHook } = useTransactions();
   const [loading, setLoading] = useState(true);
+  const [dashboardMonth, setDashboardMonth] = useState('2026-06');
 
   useEffect(() => {
     setActions(
@@ -564,7 +616,6 @@ export function DashboardPage() {
   }, [setActions]);
 
   // Local state for dashboard data
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>(INITIAL_BUDGET_ITEMS);
   const [nwItems, setNwItems] = useState<NWItem[]>(INITIAL_NET_WORTH_ITEMS);
 
@@ -582,14 +633,60 @@ export function DashboardPage() {
     return () => clearTimeout(t);
   }, []);
 
+  // Derive dashboard values from shared transaction data for the selected month
+  const monthTxns = useMemo(
+    () => allTxns.filter((t) => t.date.startsWith(dashboardMonth)),
+    [allTxns, dashboardMonth],
+  );
+
+  const monthlyIncome = useMemo(
+    () => monthTxns.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0),
+    [monthTxns],
+  );
+
+  const monthlySpend = useMemo(
+    () => monthTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + Math.abs(t.amount), 0),
+    [monthTxns],
+  );
+
+  const monthlySurplus = monthlyIncome - monthlySpend;
+  const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlySpend) / monthlyIncome) * 100 : null;
+
+  const spendingByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of monthTxns) {
+      if (t.type !== 'expense') continue;
+      map.set(t.category, (map.get(t.category) ?? 0) + Math.abs(t.amount));
+    }
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value, color: CATEGORY_COLORS[name] ?? '#7a7974' }))
+      .sort((a, b) => b.value - a.value);
+  }, [monthTxns]);
+
+  const recentTxns = useMemo(
+    () => [...allTxns].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
+    [allTxns],
+  );
+
+  // Subscription spending for selected month
+  const subscriptionTotal = subscriptions.reduce((s, sub) => s + sub.amount, 0);
+  const nextRenewal = useMemo(() => {
+    const upcoming = subscriptions
+      .map((s) => ({ ...s, d: new Date(s.renewalDate) }))
+      .filter((s) => !isNaN(s.d.getTime()))
+      .sort((a, b) => a.d.getTime() - b.d.getTime());
+    return upcoming[0] ?? null;
+  }, [subscriptions]);
+
   const netWorth = computeNetWorth(nwItems);
-  const monthlySpend = transactions
-    .filter((t) => t.type === 'expense')
-    .reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  // Budget comparison for attention card
+  const totalBudgetLimit = budgetItems.reduce((s, b) => s + b.limit, 0);
+  const budgetDelta = monthlySpend - totalBudgetLimit;
 
   // Quick Action handlers
   const handleAddTransaction = (txn: Transaction) => {
-    setTransactions((prev) => [txn, ...prev]);
+    addTxnHook({ ...txn, id: String(Date.now()) });
     setAddTxnOpen(false);
     showToast('Transaction added ✓');
   };
@@ -621,7 +718,18 @@ export function DashboardPage() {
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-6 pb-20 lg:pb-6">
+        {/* Month selector */}
+        <div className="flex items-center justify-between gap-3">
+          <Select
+            label="Month"
+            options={MONTH_OPTIONS}
+            value={dashboardMonth}
+            onChange={(e) => setDashboardMonth(e.target.value)}
+            className="max-w-[180px]"
+          />
+        </div>
+
         {/* 1. KPI Strip */}
         {loading ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -632,13 +740,36 @@ export function DashboardPage() {
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <KPICard label="Net Worth" value={netWorth} delta={2.3} icon={<Wallet className="w-5 h-5" />} />
-            <KPICard label="Monthly Income" value={MONTHLY_INCOME} delta={5.2} icon={<TrendingUp className="w-5 h-5" />} />
+            <KPICard label="Monthly Income" value={monthlyIncome} delta={5.2} icon={<TrendingUp className="w-5 h-5" />} />
             <KPICard label="Monthly Spend" value={monthlySpend} delta={-5.1} icon={<CreditCard className="w-5 h-5" />} />
-            <KPICard label="Savings Rate" value={MONTHLY_INCOME * (SAVINGS_RATE / 100)} delta={1.2} icon={<PiggyBank className="w-5 h-5" />} />
+            <SavingsRateCard rate={savingsRate} surplus={monthlySurplus} loading={loading} />
           </div>
         )}
 
-        {/* 2. Two-column: Donut + Budget */}
+        {/* 2. Financial Attention Card */}
+        {!loading && (
+          <div className="bg-white rounded-[8px] shadow-card p-4 flex items-start gap-3">
+            <span className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${budgetDelta > 0 ? 'bg-[#a12c7b]/10' : 'bg-[#437a22]/10'}`}>
+              {budgetDelta > 0
+                ? <AlertCircle className="w-5 h-5 text-[#a12c7b]" />
+                : <Lightbulb className="w-5 h-5 text-[#437a22]" />
+              }
+            </span>
+            <div className="flex-1 min-w-0">
+              {budgetDelta > 0 ? (
+                <p className="text-sm text-[#28251d]">
+                  You are <span className="font-semibold text-[#a12c7b]">{formatINR(budgetDelta)}</span> over your planned spend. Review your highest-spend categories.
+                </p>
+              ) : (
+                <p className="text-sm text-[#28251d]">
+                  You have <span className="font-semibold text-[#437a22]">{formatINR(Math.abs(budgetDelta))}</span> available this month. Consider assigning part of it to a goal or emergency fund.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 3. Two-column: Donut + Budget */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Spending by Category Donut */}
           <div className="bg-white rounded-[8px] shadow-card p-5">
@@ -654,6 +785,12 @@ export function DashboardPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            ) : spendingByCategory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <BarChart2 className="w-10 h-10 text-[#d4d2cc] mb-3" />
+                <p className="text-sm text-[#7a7974]">No expenses recorded for this month.</p>
+                <p className="text-xs text-[#7a7974] mt-0.5">Add a transaction to see spending breakdown.</p>
               </div>
             ) : (
               <>
@@ -674,18 +811,22 @@ export function DashboardPage() {
                           <Cell key={entry.name} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip content={<DonutTooltip />} />
+                      <Tooltip content={<DonutTooltip totalExpenses={monthlySpend} />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 mt-4">
-                  {spendingByCategory.map((item) => (
-                    <div key={item.name} className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-                      <span className="text-xs text-[#7a7974]">{item.name}</span>
-                      <span className="text-xs font-medium text-[#28251d] ml-auto">{formatINR(item.value)}</span>
-                    </div>
-                  ))}
+                  {spendingByCategory.map((item) => {
+                    const pct = monthlySpend > 0 ? ((item.value / monthlySpend) * 100).toFixed(0) : '0';
+                    return (
+                      <div key={item.name} className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                        <span className="text-xs text-[#7a7974]">{item.name}</span>
+                        <span className="text-xs font-medium text-[#28251d] ml-auto">{formatINR(item.value)}</span>
+                        <span className="text-[10px] text-[#7a7974] w-8 text-right">{pct}%</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -697,7 +838,7 @@ export function DashboardPage() {
               <h3 className="text-sm font-semibold text-[#28251d]">Budget Overview</h3>
               {!loading && (
                 <span className="text-xs text-[#7a7974]">
-                  67% of {formatINR(BUDGET_TOTAL)} used
+                  {totalBudgetLimit > 0 ? Math.round((monthlySpend / totalBudgetLimit) * 100) : 0}% of {formatINR(totalBudgetLimit)} used
                 </span>
               )}
             </div>
@@ -734,10 +875,66 @@ export function DashboardPage() {
                 Set or Change This Month Budget
               </Link>
             </div>
+
+            {/* Compact monthly plan summary */}
+            {!loading && (() => {
+              const plan = (() => {
+                try {
+                  const raw = localStorage.getItem('finlee_monthly_budgets');
+                  if (!raw) return null;
+                  const all = JSON.parse(raw);
+                  const now = new Date();
+                  const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                  return all[key] ?? null;
+                } catch { return null; }
+              })();
+              if (!plan) return null;
+
+              const pNum = (v: string) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+              const inflow = pNum(plan.monthlyIncome) + pNum(plan.additionalIncome) + pNum(plan.rentalIncome) + pNum(plan.spousesIncome);
+              const essential = pNum(plan.houseRentMaintenance) + pNum(plan.propertyTax) + pNum(plan.utilities) + pNum(plan.groceries) + pNum(plan.transportation) + pNum(plan.medicalExpenses) + pNum(plan.childrenSchoolFees) + pNum(plan.insurancePremiums);
+              const lifestyle = pNum(plan.maid) + pNum(plan.shopping) + pNum(plan.travel) + pNum(plan.dineEntertainment);
+              const emis = pNum(plan.homeLoanEmi) + pNum(plan.carLoanEmi) + pNum(plan.personalLoanEmi) + pNum(plan.otherEmis);
+              const investments = pNum(plan.mutualFunds) + pNum(plan.stocks) + pNum(plan.fixedDeposits) + pNum(plan.others);
+              const outflows = essential + lifestyle + emis + investments;
+              const leftover = inflow - outflows;
+              const health = leftover > 0 ? { text: 'Surplus', color: 'text-[#437a22]', bg: 'bg-[#437a22]/8' } : leftover === 0 ? { text: 'Fully allocated', color: 'text-[#b45309]', bg: 'bg-[#b45309]/8' } : { text: 'Deficit', color: 'text-[#a12c7b]', bg: 'bg-[#a12c7b]/8' };
+
+              return (
+                <div className="mt-3 bg-[#f7f6f2] rounded-[8px] p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-[#28251d]">This Month's Plan</p>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${health.bg} ${health.color}`}>{health.text}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-[10px] text-[#7a7974]">Planned Inflow</p>
+                      <p className="text-xs font-semibold text-[#28251d] mt-0.5">{formatINR(inflow)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#7a7974]">Planned Outflows</p>
+                      <p className="text-xs font-semibold text-[#a12c7b] mt-0.5">{formatINR(outflows)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#7a7974]">Planned Leftover</p>
+                      <p className={`text-xs font-semibold mt-0.5 ${leftover >= 0 ? 'text-[#437a22]' : 'text-[#a12c7b]'}`}>
+                        {leftover < 0 ? '-' : ''}{formatINR(Math.abs(leftover))}
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to="/calculators/monthly-budget-planner"
+                    className="flex items-center gap-1 text-xs font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors mt-3"
+                  >
+                    Edit Monthly Plan <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
-        {/* 3. Subscriptions */}
+        {/* 4. Subscriptions */}
         <div className="bg-white rounded-[8px] shadow-card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0ede6]">
             <div className="flex items-center gap-2">
@@ -747,6 +944,7 @@ export function DashboardPage() {
             <button
               onClick={() => setAddSubOpen(true)}
               className="text-xs font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors flex items-center gap-1"
+              aria-label="Add subscription"
             >
               <Plus className="w-3.5 h-3.5" />
               Add
@@ -765,33 +963,48 @@ export function DashboardPage() {
               <p className="text-xs text-[#7a7974] mt-0.5">Add Netflix, Spotify, or any recurring expense</p>
             </div>
           ) : (
-            <div className="divide-y divide-[#f0ede6]">
-              {subscriptions.map((sub) => (
-                <div key={sub.id} className="flex items-center gap-3 px-5 py-3.5 group">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-[#01696f]/10">
-                    <Repeat className="w-4 h-4 text-[#01696f]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#28251d] truncate">{sub.name}</p>
-                    <p className="text-xs text-[#7a7974] mt-0.5">{formatRenewal(sub.renewalDate)}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-semibold text-[#a12c7b]">{formatINR(sub.amount)}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveSubscription(sub.id)}
-                    className="text-[#d4d2cc] hover:text-[#a12c7b] transition-colors p-1 opacity-0 group-hover:opacity-100"
-                    title="Remove subscription"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+            <>
+              <div className="flex items-center justify-between px-5 py-3 bg-[#f7f6f2]">
+                <div>
+                  <p className="text-xs text-[#7a7974] font-medium">Monthly Total</p>
+                  <p className="text-sm font-bold text-[#a12c7b]">{formatINR(subscriptionTotal)}</p>
                 </div>
-              ))}
-            </div>
+                {nextRenewal && (
+                  <div className="text-right">
+                    <p className="text-xs text-[#7a7974] font-medium">Next Renewal</p>
+                    <p className="text-sm font-medium text-[#28251d]">{formatRenewal(nextRenewal.renewalDate)}</p>
+                  </div>
+                )}
+              </div>
+              <div className="divide-y divide-[#f0ede6]">
+                {subscriptions.map((sub) => (
+                  <div key={sub.id} className="flex items-center gap-3 px-5 py-3.5 group">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-[#01696f]/10">
+                      <Repeat className="w-4 h-4 text-[#01696f]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#28251d] truncate">{sub.name}</p>
+                      <p className="text-xs text-[#7a7974] mt-0.5">{formatRenewal(sub.renewalDate)}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-[#a12c7b]">{formatINR(sub.amount)}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveSubscription(sub.id)}
+                      className="text-[#d4d2cc] hover:text-[#a12c7b] transition-colors p-1 opacity-0 group-hover:opacity-100"
+                      title="Remove subscription"
+                      aria-label={`Remove ${sub.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
-        {/* 4. Goals at a Glance */}
+        {/* 5. Goals at a Glance */}
         <div className="bg-white rounded-[8px] shadow-card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0ede6]">
             <h3 className="text-sm font-semibold text-[#28251d]">Goals at a Glance</h3>
@@ -819,7 +1032,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* 5. Recent Transactions */}
+        {/* 6. Recent Transactions */}
         <div className="bg-white rounded-[8px] shadow-card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0ede6]">
             <h3 className="text-sm font-semibold text-[#28251d]">Recent Transactions</h3>
@@ -838,8 +1051,8 @@ export function DashboardPage() {
             </div>
           ) : (
             <div className="divide-y divide-[#f0ede6]">
-              {transactions.slice(0, 5).map((txn, i) => (
-                <div key={i} className="flex items-center gap-3 px-5 py-3.5">
+              {recentTxns.map((txn, i) => (
+                <div key={txn.id ?? i} className="flex items-center gap-3 px-5 py-3.5">
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
                       txn.type === 'income' ? 'bg-[#437a22]/10' : 'bg-[#a12c7b]/10'
@@ -867,7 +1080,7 @@ export function DashboardPage() {
                     >
                       {txn.type === 'income' ? '+' : '-'}{formatINR(Math.abs(txn.amount))}
                     </p>
-                    <p className="text-xs text-[#7a7974] mt-0.5">{txn.date}</p>
+                    <p className="text-xs text-[#7a7974] mt-0.5">{formatDateShort(txn.date)}</p>
                   </div>
                 </div>
               ))}
@@ -875,7 +1088,7 @@ export function DashboardPage() {
           )}
         </div>
 
-        {/* 6. Quick Actions */}
+        {/* 7. Quick Actions */}
         <div className="flex flex-wrap gap-3">
           <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setAddTxnOpen(true)}>
             <Plus className="w-4 h-4" />

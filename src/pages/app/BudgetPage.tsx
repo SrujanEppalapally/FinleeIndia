@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -16,6 +16,7 @@ import {
   Home,
   X,
   TrendingDown,
+  ArrowRight,
 } from 'lucide-react';
 import { Button, Input, Badge } from '../../components/ui';
 import { useTopBarActions } from '../../contexts/TopBarActionsContext';
@@ -50,10 +51,21 @@ const INITIAL_BUDGETS: BudgetCategory[] = [
   { id: 'emi', name: 'EMI / Loans', spent: 28500, limit: 30000 },
 ];
 
+// Per-month spent overrides (mock). Keys are month indices 0–11.
+// Only June (5) has detailed mock data; other months use scaled estimates.
+const MONTH_SPENT_SCALE: Record<number, number> = {
+  3: 0.88, // April
+  4: 0.94, // May
+  5: 1.0,  // June (full mock data)
+  6: 0.72, // July
+  7: 0.65, // August
+};
+
 const MOCK_TRANSACTIONS: MockTransaction[] = [
   { merchant: 'Swiggy', amount: 450, date: '10 Jun', category: 'food' },
   { merchant: 'Zomato', amount: 620, date: '8 Jun', category: 'food' },
   { merchant: 'Swiggy', amount: 380, date: '5 Jun', category: 'food' },
+  { merchant: 'BigBasket', amount: 1200, date: '4 Jun', category: 'food' },
   { merchant: 'Ola', amount: 280, date: '10 Jun', category: 'transport' },
   { merchant: 'Uber', amount: 520, date: '7 Jun', category: 'transport' },
   { merchant: 'Metro Card', amount: 200, date: '3 Jun', category: 'transport' },
@@ -93,17 +105,37 @@ function pct(spent: number, limit: number): number {
   return Math.round((spent / limit) * 100);
 }
 
-function barColor(p: number): string {
-  if (p > 100) return 'bg-[#a12c7b]';
-  if (p >= 70) return 'bg-[#b45309]';
-  return 'bg-[#437a22]';
+type UtilLevel = 'on-track' | 'approaching' | 'over';
+
+function utilLevel(p: number): UtilLevel {
+  if (p >= 100) return 'over';
+  if (p >= 70) return 'approaching';
+  return 'on-track';
 }
 
-function pctTextColor(p: number): string {
-  if (p > 100) return 'text-[#a12c7b]';
-  if (p >= 70) return 'text-[#b45309]';
-  return 'text-[#437a22]';
-}
+const utilStyles: Record<UtilLevel, { bar: string; text: string; bg: string; ring: string; label: string }> = {
+  'on-track': {
+    bar: 'bg-[#437a22]',
+    text: 'text-[#437a22]',
+    bg: 'bg-[#437a22]/8',
+    ring: '',
+    label: 'On Track',
+  },
+  approaching: {
+    bar: 'bg-[#b45309]',
+    text: 'text-[#b45309]',
+    bg: 'bg-[#b45309]/8',
+    ring: '',
+    label: 'Approaching Limit',
+  },
+  over: {
+    bar: 'bg-[#a12c7b]',
+    text: 'text-[#a12c7b]',
+    bg: 'bg-[#a12c7b]/8',
+    ring: 'ring-1 ring-[#a12c7b]/30',
+    label: 'Over Budget',
+  },
+};
 
 const categoryIcon: Record<string, React.ElementType> = {
   food: Utensils,
@@ -132,11 +164,13 @@ const categoryBadge: Record<string, 'green' | 'red' | 'yellow' | 'gray' | 'teal'
 function SetBudgetModal({
   category,
   currentLimit,
+  monthLabel,
   onSave,
   onClose,
 }: {
   category: BudgetCategory | null;
   currentLimit: number;
+  monthLabel: string;
   onSave: (id: string, limit: number) => void;
   onClose: () => void;
 }) {
@@ -163,7 +197,7 @@ function SetBudgetModal({
       <div className="bg-white rounded-t-[12px] lg:rounded-[8px] shadow-card-md w-full max-w-sm relative z-10">
         <div className="flex items-center justify-between p-5 border-b border-[#f0ede6]">
           <h3 className="text-base font-semibold text-[#28251d]">Set Budget</h3>
-          <button onClick={onClose} className="text-[#7a7974] hover:text-[#28251d]">
+          <button onClick={onClose} className="text-[#7a7974] hover:text-[#28251d]" aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -171,6 +205,7 @@ function SetBudgetModal({
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium text-[#7a7974]">Category</p>
             <p className="text-sm font-semibold text-[#28251d]">{category.name}</p>
+            <p className="text-xs text-[#7a7974] mt-0.5">For {monthLabel}</p>
           </div>
           <Input
             label="Monthly Limit (₹)"
@@ -191,62 +226,109 @@ function SetBudgetModal({
   );
 }
 
+// ── Overflow Progress Bar ──────────────────────────────────────
+
+function OverflowBar({ spent, limit }: { spent: number; limit: number }) {
+  const p = pct(spent, limit);
+  const level = utilLevel(p);
+  const styles = utilStyles[level];
+  const isOver = p > 100;
+  const overPct = isOver ? Math.min(p - 100, 100) : 0;
+
+  return (
+    <div className="relative h-2.5 bg-[#f0ede6] rounded-full overflow-hidden">
+      {/* Main fill — capped at 100% */}
+      <div
+        className={`h-full rounded-full transition-all duration-500 ${styles.bar}`}
+        style={{ width: `${Math.min(p, 100)}%` }}
+      />
+      {/* Overflow hatched segment */}
+      {isOver && (
+        <div
+          className="absolute top-0 right-0 h-full rounded-r-full overflow-hidden"
+          style={{ width: `${overPct}%` }}
+        >
+          <div
+            className="h-full w-full"
+            style={{
+              backgroundImage:
+                'repeating-linear-gradient(45deg, #a12c7b 0, #a12c7b 4px, #d45ca0 4px, #d45ca0 8px)',
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── BudgetCategoryCard ─────────────────────────────────────────
 
 function BudgetCategoryCard({
   budget,
+  monthIdx,
   onEdit,
+  onViewAllTransactions,
 }: {
   budget: BudgetCategory;
+  monthIdx: number;
   onEdit: (b: BudgetCategory) => void;
+  onViewAllTransactions: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const p = pct(budget.spent, budget.limit);
-  const fillWidth = Math.min(p, 100);
-  const isOver = p > 100;
+  const level = utilLevel(p);
+  const styles = utilStyles[level];
   const isEmpty = budget.spent === 0;
   const IconComp = categoryIcon[budget.id] ?? TrendingDown;
+  const overBy = budget.spent - budget.limit;
+  const remaining = budget.limit - budget.spent;
 
-  const txns = MOCK_TRANSACTIONS.filter((t) => t.category === budget.id).slice(0, 3);
+  const txns = useMemo(
+    () => MOCK_TRANSACTIONS.filter((t) => t.category === budget.id),
+    [budget.id],
+  );
+
+  // Trend: current, previous, 3-month average (mock-derived from scale)
+  const currentSpent = budget.spent;
+  const prevScale = MONTH_SPENT_SCALE[monthIdx - 1] ?? 0.9;
+  const prevSpent = Math.round(currentSpent * prevScale);
+  const threeMoAvg = Math.round(
+    (currentSpent + prevSpent + Math.round(currentSpent * (MONTH_SPENT_SCALE[monthIdx - 2] ?? 0.85))) / 3,
+  );
 
   return (
-    <div className={[
-      'bg-white rounded-[8px] shadow-card transition-shadow',
-      isOver ? 'ring-1 ring-[#a12c7b]/30' : '',
-    ].join(' ')}>
+    <div className={['bg-white rounded-[8px] shadow-card transition-shadow', styles.ring].join(' ')}>
       {/* Card header */}
       <button
-        onClick={() => !isEmpty && setExpanded((e) => !e)}
+        onClick={() => setExpanded((e) => !e)}
         className="w-full text-left p-5"
+        aria-expanded={expanded}
+        aria-label={`Expand ${budget.name} details`}
       >
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
             <div className={[
               'w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0',
-              isOver ? 'bg-[#a12c7b]/10' : 'bg-[#01696f]/10',
+              level === 'over' ? 'bg-[#a12c7b]/10' : 'bg-[#01696f]/10',
             ].join(' ')}>
-              <IconComp className={`w-4 h-4 ${isOver ? 'text-[#a12c7b]' : 'text-[#01696f]'}`} />
+              <IconComp className={`w-4 h-4 ${level === 'over' ? 'text-[#a12c7b]' : 'text-[#01696f]'}`} />
             </div>
             <div>
               <p className="text-sm font-semibold text-[#28251d]">{budget.name}</p>
-              {isOver && (
-                <p className="text-xs text-[#a12c7b] font-medium mt-0.5">Over budget</p>
-              )}
+              <p className={`text-xs font-medium mt-0.5 ${styles.text}`}>{styles.label}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(budget); }}
               className="text-[#7a7974] hover:text-[#01696f] transition-colors p-1"
-              title="Edit budget"
+              aria-label={`Edit ${budget.name} budget`}
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            {!isEmpty && (
-              expanded
-                ? <ChevronUp className="w-4 h-4 text-[#7a7974]" />
-                : <ChevronDown className="w-4 h-4 text-[#7a7974]" />
-            )}
+            {expanded
+              ? <ChevronUp className="w-4 h-4 text-[#7a7974]" />
+              : <ChevronDown className="w-4 h-4 text-[#7a7974]" />}
           </div>
         </div>
 
@@ -257,42 +339,111 @@ function BudgetCategoryCard({
           </div>
         ) : (
           <>
-            {/* Progress bar */}
-            <div className="h-2 bg-[#f0ede6] rounded-full overflow-hidden mb-2">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${barColor(p)}`}
-                style={{ width: `${fillWidth}%` }}
-              />
-            </div>
+            {/* Progress bar with overflow */}
+            <OverflowBar spent={budget.spent} limit={budget.limit} />
             {/* Labels */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-[#7a7974]">
                 {formatINR(budget.spent)} <span className="text-[#d4d2cc]">/</span> {formatINR(budget.limit)}
               </p>
-              <p className={`text-xs font-semibold ${pctTextColor(p)}`}>{p}%</p>
+              <p className={`text-xs font-semibold ${styles.text}`}>{p}%</p>
+            </div>
+            {/* Over/remaining amount */}
+            <div className="mt-1">
+              {overBy > 0 ? (
+                <p className={`text-xs font-medium ${styles.text}`}>
+                  Over budget by {formatINR(overBy)}
+                </p>
+              ) : (
+                <p className="text-xs font-medium text-[#437a22]">
+                  {formatINR(remaining)} remaining
+                </p>
+              )}
             </div>
           </>
         )}
       </button>
 
-      {/* Expanded transactions */}
-      {expanded && txns.length > 0 && (
-        <div className="border-t border-[#f0ede6] px-5 py-3">
-          <p className="text-[10px] font-semibold text-[#7a7974] uppercase tracking-wide mb-2">
-            Recent transactions
-          </p>
-          <div className="space-y-2">
-            {txns.map((t, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant={categoryBadge[budget.id] ?? 'gray'} className="text-[10px]">
-                    {t.date}
-                  </Badge>
-                  <span className="text-xs text-[#28251d]">{t.merchant}</span>
-                </div>
-                <span className="text-xs font-medium text-[#a12c7b]">-{formatINR(t.amount)}</span>
+      {/* Expanded drill-down */}
+      {expanded && (
+        <div className="border-t border-[#f0ede6] px-5 py-4 space-y-4">
+          {/* Transactions */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold text-[#7a7974] uppercase tracking-wide">
+                Transactions this month
+              </p>
+              <p className="text-[10px] font-semibold text-[#28251d]">
+                Total: {formatINR(budget.spent)}
+              </p>
+            </div>
+            {txns.length > 0 ? (
+              <div className="space-y-2">
+                {txns.map((t, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={categoryBadge[budget.id] ?? 'gray'} className="text-[10px]">
+                        {t.date}
+                      </Badge>
+                      <span className="text-xs text-[#28251d]">{t.merchant}</span>
+                    </div>
+                    <span className="text-xs font-medium text-[#a12c7b]">-{formatINR(t.amount)}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-xs text-[#7a7974] mb-3">
+                  No transactions recorded for this category this month.
+                </p>
+                <Button variant="secondary" size="sm" className="gap-1.5">
+                  <Plus className="w-3.5 h-3.5" /> Add Transaction
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Trend */}
+          <div className="border-t border-[#f0ede6] pt-3">
+            <p className="text-[10px] font-semibold text-[#7a7974] uppercase tracking-wide mb-2">
+              Trend
+            </p>
+            {monthIdx > 0 ? (
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-[#f7f6f2] rounded-[6px] py-2">
+                  <p className="text-[10px] text-[#7a7974]">This Month</p>
+                  <p className="text-xs font-semibold text-[#28251d] mt-0.5">{formatINR(currentSpent)}</p>
+                </div>
+                <div className="bg-[#f7f6f2] rounded-[6px] py-2">
+                  <p className="text-[10px] text-[#7a7974]">Last Month</p>
+                  <p className="text-xs font-semibold text-[#28251d] mt-0.5">{formatINR(prevSpent)}</p>
+                </div>
+                <div className="bg-[#f7f6f2] rounded-[6px] py-2">
+                  <p className="text-[10px] text-[#7a7974]">3-Mo Avg</p>
+                  <p className="text-xs font-semibold text-[#28251d] mt-0.5">{formatINR(threeMoAvg)}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-[#7a7974] text-center py-2">
+                Trend will appear after you have data for more months.
+              </p>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-3 border-t border-[#f0ede6] pt-3">
+            <button
+              onClick={() => onEdit(budget)}
+              className="flex items-center gap-1.5 text-xs font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" /> Edit Budget
+            </button>
+            <button
+              onClick={onViewAllTransactions}
+              className="flex items-center gap-1 text-xs font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors"
+            >
+              View All Transactions <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
         </div>
       )}
@@ -315,9 +466,22 @@ export function BudgetPage() {
   const [newCatLimit, setNewCatLimit] = useState('');
   const [newCatError, setNewCatError] = useState('');
 
-  const totalBudgeted = budgets.reduce((s, b) => s + b.limit, 0);
-  const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
+  const monthLabel = `${MONTHS[monthIdx]} ${year}`;
+
+  // Scale spent amounts per selected month (mock — June has full data)
+  const displayBudgets = useMemo(() => {
+    const scale = MONTH_SPENT_SCALE[monthIdx] ?? 1;
+    if (monthIdx === 5) return budgets;
+    return budgets.map((b) => ({
+      ...b,
+      spent: monthIdx < 3 ? 0 : Math.round(b.spent * scale),
+    }));
+  }, [budgets, monthIdx]);
+
+  const totalBudgeted = displayBudgets.reduce((s, b) => s + b.limit, 0);
+  const totalSpent = displayBudgets.reduce((s, b) => s + b.spent, 0);
   const remaining = totalBudgeted - totalSpent;
+  const isOverTotal = remaining < 0;
 
   // TopBar: month nav + Edit Budgets
   useEffect(() => {
@@ -327,6 +491,7 @@ export function BudgetPage() {
           <button
             onClick={() => setMonthIdx((m) => Math.max(0, m - 1))}
             className="w-7 h-7 flex items-center justify-center rounded-[6px] text-[#7a7974] hover:bg-[#f0ede6] hover:text-[#28251d] transition-colors"
+            aria-label="Previous month"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -336,6 +501,7 @@ export function BudgetPage() {
           <button
             onClick={() => setMonthIdx((m) => Math.min(11, m + 1))}
             className="w-7 h-7 flex items-center justify-center rounded-[6px] text-[#7a7974] hover:bg-[#f0ede6] hover:text-[#28251d] transition-colors"
+            aria-label="Next month"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -344,7 +510,7 @@ export function BudgetPage() {
           variant="secondary"
           size="sm"
           className="gap-1.5"
-          onClick={() => setEditTarget(budgets[0])}
+          onClick={() => { setEditTarget(displayBudgets[0]); setEditLimit(displayBudgets[0].limit); }}
         >
           <Pencil className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Edit Budgets</span>
@@ -352,11 +518,11 @@ export function BudgetPage() {
       </div>
     );
     return () => setActions(null);
-  }, [setActions, monthIdx, year, budgets]);
+  }, [setActions, monthIdx, year, displayBudgets]);
 
   const handleSaveLimit = (id: string, limit: number) => {
     setBudgets((prev) => prev.map((b) => (b.id === id ? { ...b, limit } : b)));
-    showToast('Budget updated');
+    showToast('Budget updated successfully');
   };
 
   const handleAddCategory = () => {
@@ -368,12 +534,12 @@ export function BudgetPage() {
       { id, name: newCatName.trim(), spent: 0, limit: Number(newCatLimit) },
     ]);
     setNewCatName(''); setNewCatLimit(''); setNewCatError(''); setAddOpen(false);
-    showToast('Budget updated');
+    showToast('Budget updated successfully');
   };
 
   return (
     <>
-      <div className="space-y-5">
+      <div className="space-y-5 pb-20 lg:pb-5">
         {/* Summary strip */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-[8px] shadow-card p-4 text-center">
@@ -392,13 +558,24 @@ export function BudgetPage() {
           </div>
         </div>
 
+        {/* Over/under budget explanation */}
+        <div className={`rounded-[8px] px-4 py-2.5 ${isOverTotal ? 'bg-[#a12c7b]/8' : 'bg-[#437a22]/8'}`}>
+          <p className={`text-xs font-medium ${isOverTotal ? 'text-[#a12c7b]' : 'text-[#437a22]'}`}>
+            {isOverTotal
+              ? `You are over the total budget by ${formatINR(Math.abs(remaining))}.`
+              : `${formatINR(remaining)} remaining across all categories.`}
+          </p>
+        </div>
+
         {/* Budget cards grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {budgets.map((b) => (
+          {displayBudgets.map((b) => (
             <BudgetCategoryCard
               key={b.id}
               budget={b}
+              monthIdx={monthIdx}
               onEdit={(budget) => { setEditTarget(budget); setEditLimit(budget.limit); }}
+              onViewAllTransactions={() => showToast('Opening all transactions…')}
             />
           ))}
         </div>
@@ -421,6 +598,7 @@ export function BudgetPage() {
       <SetBudgetModal
         category={editTarget}
         currentLimit={editLimit}
+        monthLabel={monthLabel}
         onSave={handleSaveLimit}
         onClose={() => setEditTarget(null)}
       />
@@ -432,7 +610,7 @@ export function BudgetPage() {
           <div className="bg-white rounded-t-[12px] lg:rounded-[8px] shadow-card-md w-full max-w-sm relative z-10">
             <div className="flex items-center justify-between p-5 border-b border-[#f0ede6]">
               <h3 className="text-base font-semibold text-[#28251d]">Add Category Budget</h3>
-              <button onClick={() => setAddOpen(false)} className="text-[#7a7974] hover:text-[#28251d]">
+              <button onClick={() => setAddOpen(false)} className="text-[#7a7974] hover:text-[#28251d]" aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
