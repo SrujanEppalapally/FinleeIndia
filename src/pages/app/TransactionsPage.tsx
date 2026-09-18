@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search,
   Plus,
@@ -68,10 +69,34 @@ const categoryBadgeVariant: Record<string, 'green' | 'red' | 'yellow' | 'gray' |
 };
 
 const categoryOptions = categories.map((c) => ({ value: c, label: c }));
-const monthOptions = [
-  { value: '2026-05', label: 'May 2026' },
-  { value: '2026-06', label: 'June 2026' },
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
+
+function generateMonthOptions(): { value: string; label: string }[] {
+  const now = new Date();
+  const options: { value: string; label: string }[] = [];
+  for (let i = -11; i <= 3; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+    options.push({ value, label });
+  }
+  return options;
+}
+
+const monthOptions = generateMonthOptions();
+
+function currentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function isInSelectedMonth(transactionDate: string, selectedMonth: string): boolean {
+  return transactionDate.slice(0, 7) === selectedMonth;
+}
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -378,7 +403,17 @@ export function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [monthFilter, setMonthFilter] = useState('2026-05');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const monthFilter = searchParams.get('month') ?? currentMonth();
+  const setMonthFilter = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === currentMonth()) {
+      next.delete('month');
+    } else {
+      next.set('month', value);
+    }
+    setSearchParams(next, { replace: true });
+  };
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [selectedTxn, setSelectedTxn] = useState<Transaction | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -407,8 +442,7 @@ export function TransactionsPage() {
       if (categoryFilter && t.category !== categoryFilter) return false;
       if (typeFilter !== 'all' && t.type !== typeFilter) return false;
       if (monthFilter) {
-        const prefix = monthFilter; // e.g. "2026-05"
-        if (!t.date.startsWith(prefix)) return false;
+        if (!isInSelectedMonth(t.date, monthFilter)) return false;
       }
       return true;
     });

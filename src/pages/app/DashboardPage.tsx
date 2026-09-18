@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Wallet,
   TrendingUp,
@@ -31,10 +31,33 @@ import {
 
 // ── Constants ───────────────────────────────────────────────────
 
-const MONTH_OPTIONS = [
-  { value: '2026-05', label: 'May 2026' },
-  { value: '2026-06', label: 'June 2026' },
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
+
+function generateMonthOptions(): { value: string; label: string }[] {
+  const now = new Date();
+  const options: { value: string; label: string }[] = [];
+  for (let i = -11; i <= 3; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+    options.push({ value, label });
+  }
+  return options;
+}
+
+const MONTH_OPTIONS = generateMonthOptions();
+
+function currentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function isInSelectedMonth(transactionDate: string, selectedMonth: string): boolean {
+  return transactionDate.slice(0, 7) === selectedMonth;
+}
 
 const CATEGORY_COLORS: Record<string, string> = {
   Food: '#01696f',
@@ -598,7 +621,17 @@ export function DashboardPage() {
   const { setActions } = useTopBarActions();
   const { data: allTxns, add: addTxnHook } = useTransactions();
   const [loading, setLoading] = useState(true);
-  const [dashboardMonth, setDashboardMonth] = useState('2026-06');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const dashboardMonth = searchParams.get('month') ?? currentMonth();
+  const setDashboardMonth = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === currentMonth()) {
+      next.delete('month');
+    } else {
+      next.set('month', value);
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     setActions(
@@ -633,7 +666,7 @@ export function DashboardPage() {
 
   // Derive dashboard values from shared transaction data for the selected month
   const monthTxns = useMemo(
-    () => allTxns.filter((t) => t.date.startsWith(dashboardMonth)),
+    () => allTxns.filter((t) => isInSelectedMonth(t.date, dashboardMonth)),
     [allTxns, dashboardMonth],
   );
 
