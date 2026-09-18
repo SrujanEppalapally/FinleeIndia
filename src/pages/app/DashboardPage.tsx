@@ -31,8 +31,6 @@ import {
 
 // ── Constants ───────────────────────────────────────────────────
 
-const BUDGET_TOTAL = 63000;
-
 const MONTH_OPTIONS = [
   { value: '2026-05', label: 'May 2026' },
   { value: '2026-06', label: 'June 2026' },
@@ -163,11 +161,11 @@ function DonutTooltip({ active, payload, totalExpenses }: { active?: boolean; pa
 
 // ── Savings Rate Card ──────────────────────────────────────────
 
-function SavingsRateCard({ rate, surplus, loading }: { rate: number | null; surplus: number; loading: boolean }) {
+function SavingsRateCard({ rate, surplus, loading }: { rate: number; surplus: number; loading: boolean }) {
   if (loading) {
     return <Skeleton variant="card" />;
   }
-  const display = rate === null ? 'No income data' : `${rate.toFixed(1)}%`;
+  const display = `${rate.toFixed(1)}%`;
   return (
     <div className="bg-white rounded-[8px] shadow-card p-5 flex flex-col gap-3 relative">
       <span className="absolute top-4 right-4 text-[#7a7974] w-5 h-5 flex items-center justify-center opacity-60">
@@ -649,8 +647,13 @@ export function DashboardPage() {
     [monthTxns],
   );
 
+  // Dashboard verification:
+  // income = sum of t.amount where t.type === 'income' and t.date starts with dashboardMonth
+  // expenses = sum of Math.abs(t.amount) where t.type === 'expense' and t.date starts with dashboardMonth
+  // surplus = income - expenses
+  // savings rate = surplus / income * 100 (0 when income is 0)
   const monthlySurplus = monthlyIncome - monthlySpend;
-  const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlySpend) / monthlyIncome) * 100 : null;
+  const savingsRate = monthlyIncome > 0 ? (monthlySurplus / monthlyIncome) * 100 : 0;
 
   const spendingByCategory = useMemo(() => {
     const map = new Map<string, number>();
