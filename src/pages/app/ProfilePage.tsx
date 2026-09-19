@@ -60,7 +60,7 @@ export function ProfilePage() {
   const [phone, setPhone] = useState(MOCK.phone);
   const [whatsapp, setWhatsapp] = useState(MOCK.whatsapp);
   const [errors, setErrors] = useState<{ name?: string; phone?: string; whatsapp?: string }>({});
-  const [saved, setSaved] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const initials = name
@@ -77,8 +77,11 @@ export function ProfilePage() {
     if (phone && !/^\d{10}$/.test(phone.replace(/\s/g, ''))) errs.phone = 'Enter a valid 10-digit number';
     if (whatsapp && !/^\d{10}$/.test(whatsapp.replace(/\s/g, ''))) errs.whatsapp = 'Enter a valid 10-digit number';
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaveState('saving');
+    setTimeout(() => {
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 2500);
+    }, 800);
   };
 
   return (
@@ -86,14 +89,15 @@ export function ProfilePage() {
       <div className="mx-auto w-full max-w-2xl space-y-5">
         {/* Avatar section */}
         <div className="bg-white rounded-[8px] shadow-card p-6 flex flex-col items-center gap-3">
-          <div className="w-20 h-20 rounded-full bg-[#01696f] flex items-center justify-center">
-            <span className="text-2xl font-bold text-white tracking-wide">{initials}</span>
+          <div className="w-20 h-20 rounded-full bg-[#01696f] flex items-center justify-center" role="img" aria-label={`${name}'s avatar`}>
+            <span className="text-2xl font-bold text-white tracking-wide" aria-hidden="true">{initials}</span>
           </div>
           <button
             type="button"
+            aria-label="Change profile photo"
             className="flex items-center gap-1.5 text-sm font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors"
           >
-            <Camera className="w-4 h-4" />
+            <Camera className="w-4 h-4" aria-hidden="true" />
             Change Photo
           </button>
         </div>
@@ -112,27 +116,30 @@ export function ProfilePage() {
 
             {/* Email — read only */}
             <div className="w-full flex flex-col gap-1">
-              <label className="text-sm font-medium text-[#28251d]">Email</label>
+              <label htmlFor="profile-email" className="text-sm font-medium text-[#28251d]">Email</label>
               <div className="relative">
                 <input
+                  id="profile-email"
                   type="email"
                   value={MOCK.email}
                   readOnly
+                  aria-readonly="true"
                   className="w-full h-10 rounded-[6px] border border-[#d4d2cc] bg-[#f7f6f2] text-[#7a7974] text-sm px-3 pr-9 cursor-not-allowed"
                 />
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#7a7974]" />
+                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#7a7974]" aria-hidden="true" />
               </div>
               <p className="text-[11px] text-[#7a7974]">Email cannot be changed</p>
             </div>
 
             {/* Phone */}
             <div className="w-full flex flex-col gap-1">
-              <label className="text-sm font-medium text-[#28251d]">Phone Number</label>
+              <label htmlFor="profile-phone" className="text-sm font-medium text-[#28251d]">Phone Number</label>
               <div className="flex">
                 <span className="inline-flex items-center px-3 h-10 rounded-l-[6px] border border-r-0 border-[#d4d2cc] bg-[#f7f6f2] text-sm text-[#7a7974] select-none">
                   +91
                 </span>
                 <input
+                  id="profile-phone"
                   type="tel"
                   placeholder="98765 43210"
                   value={phone}
@@ -153,8 +160,8 @@ export function ProfilePage() {
 
             {/* WhatsApp */}
             <div className="w-full flex flex-col gap-1">
-              <label className="text-sm font-medium text-[#28251d] flex items-center gap-1.5">
-                <MessageCircle className="w-4 h-4 text-[#25d366]" />
+              <label htmlFor="profile-whatsapp" className="text-sm font-medium text-[#28251d] flex items-center gap-1.5">
+                <MessageCircle className="w-4 h-4 text-[#25d366]" aria-hidden="true" />
                 WhatsApp Number
               </label>
               <div className="flex">
@@ -162,6 +169,7 @@ export function ProfilePage() {
                   +91
                 </span>
                 <input
+                  id="profile-whatsapp"
                   type="tel"
                   placeholder="98765 43210"
                   value={whatsapp}
@@ -182,11 +190,16 @@ export function ProfilePage() {
             </div>
 
             <div className="flex items-center gap-3 pt-1">
-              <Button type="submit" variant="primary" size="md">
-                Save Changes
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                disabled={saveState === 'saving'}
+              >
+                {saveState === 'saving' ? 'Saving...' : 'Save Changes'}
               </Button>
-              {saved && (
-                <span className="text-sm font-medium text-[#437a22] animate-pulse">
+              {saveState === 'saved' && (
+                <span className="text-sm font-medium text-[#437a22] animate-pulse" role="status">
                   Saved!
                 </span>
               )}
