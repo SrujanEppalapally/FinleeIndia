@@ -16,12 +16,14 @@ import {
   Search,
   ArrowRight,
   Wallet,
+  Target,
+  X,
 } from 'lucide-react';
 import { Input } from '../../components/ui';
 
 // ── Types ──────────────────────────────────────────────────────
 
-type Tab = 'grow' | 'manage';
+type Tab = 'grow' | 'manage' | 'plan';
 
 interface CalcCard {
   id: string;
@@ -34,9 +36,16 @@ interface CalcCard {
   tab: Tab;
 }
 
+const TAB_LABELS: Record<Tab, string> = {
+  grow: 'Grow Wealth',
+  manage: 'Manage Money',
+  plan: 'Plan Goals',
+};
+
 // ── Calculator registry ────────────────────────────────────────
 
 const CALCULATORS: CalcCard[] = [
+  // Grow Wealth
   {
     id: 'sip',
     icon: TrendingUp,
@@ -45,36 +54,6 @@ const CALCULATORS: CalcCard[] = [
     title: 'Incremental SIP',
     description: 'Step-up SIP with % or fixed annual increase',
     path: '/calculators/sip',
-    tab: 'grow',
-  },
-  {
-    id: 'dream-house',
-    icon: Home,
-    iconBg: 'bg-[#0e7490]/10',
-    iconColor: 'text-[#0e7490]',
-    title: 'Dream House',
-    description: 'Future price, EMI, and SIP needed for your home',
-    path: '/calculators/dream-house',
-    tab: 'grow',
-  },
-  {
-    id: 'retirement',
-    icon: Sunset,
-    iconBg: 'bg-[#437a22]/10',
-    iconColor: 'text-[#437a22]',
-    title: 'Retirement Corpus',
-    description: 'How much do you need to retire comfortably?',
-    path: '/calculators/retirement',
-    tab: 'grow',
-  },
-  {
-    id: 'fire',
-    icon: Flame,
-    iconBg: 'bg-[#b45309]/10',
-    iconColor: 'text-[#b45309]',
-    title: 'FIRE Calculator',
-    description: 'Find your Financial Independence number and age',
-    path: '/calculators/fire',
     tab: 'grow',
   },
   {
@@ -97,6 +76,7 @@ const CALCULATORS: CalcCard[] = [
     path: '/calculators/lumpsum-vs-sip',
     tab: 'grow',
   },
+  // Manage Money
   {
     id: 'emi',
     icon: Calculator,
@@ -128,26 +108,6 @@ const CALCULATORS: CalcCard[] = [
     tab: 'manage',
   },
   {
-    id: 'dream-vehicle',
-    icon: Car,
-    iconBg: 'bg-[#b45309]/10',
-    iconColor: 'text-[#b45309]',
-    title: 'Dream Vehicle',
-    description: 'Is that car within your salary budget?',
-    path: '/calculators/dream-vehicle',
-    tab: 'manage',
-  },
-  {
-    id: 'trip-budget',
-    icon: Plane,
-    iconBg: 'bg-[#0e7490]/10',
-    iconColor: 'text-[#0e7490]',
-    title: 'Trip Budget Planner',
-    description: 'Plan your holiday cost and monthly savings',
-    path: '/calculators/trip-budget',
-    tab: 'manage',
-  },
-  {
     id: 'debt-payoff',
     icon: CreditCard,
     iconBg: 'bg-[#a12c7b]/10',
@@ -167,11 +127,63 @@ const CALCULATORS: CalcCard[] = [
     path: '/calculators/monthly-budget-planner',
     tab: 'manage',
   },
+  // Plan Goals
+  {
+    id: 'dream-house',
+    icon: Home,
+    iconBg: 'bg-[#0e7490]/10',
+    iconColor: 'text-[#0e7490]',
+    title: 'Dream House',
+    description: 'Future price, EMI, and SIP needed for your home',
+    path: '/calculators/dream-house',
+    tab: 'plan',
+  },
+  {
+    id: 'dream-vehicle',
+    icon: Car,
+    iconBg: 'bg-[#b45309]/10',
+    iconColor: 'text-[#b45309]',
+    title: 'Dream Vehicle',
+    description: 'Is that car within your salary budget?',
+    path: '/calculators/dream-vehicle',
+    tab: 'plan',
+  },
+  {
+    id: 'retirement',
+    icon: Sunset,
+    iconBg: 'bg-[#437a22]/10',
+    iconColor: 'text-[#437a22]',
+    title: 'Retirement Corpus',
+    description: 'How much do you need to retire comfortably?',
+    path: '/calculators/retirement',
+    tab: 'plan',
+  },
+  {
+    id: 'fire',
+    icon: Flame,
+    iconBg: 'bg-[#b45309]/10',
+    iconColor: 'text-[#b45309]',
+    title: 'FIRE Calculator',
+    description: 'Find your Financial Independence number and age',
+    path: '/calculators/fire',
+    tab: 'plan',
+  },
+  {
+    id: 'trip-budget',
+    icon: Plane,
+    iconBg: 'bg-[#0e7490]/10',
+    iconColor: 'text-[#0e7490]',
+    title: 'Trip Budget Planner',
+    description: 'Plan your holiday cost and monthly savings',
+    path: '/calculators/trip-budget',
+    tab: 'plan',
+  },
 ];
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'grow', label: '📈 Grow Wealth' },
   { id: 'manage', label: '💳 Manage Money' },
+  { id: 'plan', label: '🎯 Plan Goals' },
 ];
 
 // ── Calculator Card ────────────────────────────────────────────
@@ -189,11 +201,15 @@ function CalcCardItem({ calc, onClick }: { calc: CalcCard; onClick: () => void }
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <Target className="w-3 h-3 text-[#7a7974] flex-shrink-0" />
+              <span className="text-[11px] font-medium text-[#7a7974] uppercase tracking-wide">{TAB_LABELS[calc.tab]}</span>
+            </div>
             <p className="text-sm font-semibold text-[#28251d]">{calc.title}</p>
             <p className="text-xs text-[#7a7974] mt-0.5 leading-relaxed">{calc.description}</p>
           </div>
           <button
-            className="flex-shrink-0 flex items-center gap-1 text-xs font-medium text-[#01696f] border border-[#01696f] rounded-[6px] px-2.5 py-1.5 hover:bg-[#01696f] hover:text-white transition-colors group-hover:bg-[#01696f] group-hover:text-white"
+            className="flex-shrink-0 flex items-center gap-1 text-xs font-medium text-[#01696f] border border-[#01696f] rounded-[6px] px-2.5 min-h-[44px] hover:bg-[#01696f] hover:text-white transition-colors group-hover:bg-[#01696f] group-hover:text-white"
             onClick={(e) => { e.stopPropagation(); onClick(); }}
           >
             Open
@@ -217,9 +233,12 @@ export function CalculatorsPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     if (!q) return CALCULATORS.filter((c) => c.tab === activeTab);
-    return CALCULATORS.filter(
-      (c) => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)
-    );
+    return CALCULATORS.filter((c) => {
+      const inTitle = c.title.toLowerCase().includes(q);
+      const inDesc = c.description.toLowerCase().includes(q);
+      const inCategory = TAB_LABELS[c.tab].toLowerCase().includes(q);
+      return inTitle || inDesc || inCategory;
+    });
   }, [search, activeTab]);
 
   return (
@@ -242,7 +261,7 @@ export function CalculatorsPage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={[
-                'flex-shrink-0 px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
+                'flex-shrink-0 px-4 sm:px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
                 activeTab === tab.id
                   ? 'border-[#01696f] text-[#01696f]'
                   : 'border-transparent text-[#7a7974] hover:text-[#28251d] hover:border-[#d4d2cc]',
@@ -264,8 +283,14 @@ export function CalculatorsPage() {
       {/* Cards grid */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-[8px] shadow-card p-10 text-center">
-          <p className="text-sm font-medium text-[#28251d]">No calculators match "{search}"</p>
-          <p className="text-xs text-[#7a7974] mt-1">Try a different search term</p>
+          <p className="text-sm font-medium text-[#28251d]">No calculators match your search.</p>
+          <button
+            onClick={() => setSearch('')}
+            className="inline-flex items-center gap-1 mt-3 text-sm font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+            Clear search
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
