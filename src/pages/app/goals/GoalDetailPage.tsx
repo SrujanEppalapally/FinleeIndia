@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { Button, Input, Select, Badge, EmptyState } from '../../../components/ui';
 import { formatINR } from '../../../components/ui/CurrencyDisplay';
-import { GOAL_TYPES } from '../../../constants/goalTypes';
+import { GOAL_TYPES, getCalculatorForGoalType } from '../../../constants/goalTypes';
 import {
   Goal,
   GoalStatus,
@@ -256,6 +256,7 @@ export function GoalDetailPage() {
   const remaining = Math.max(0, goal.targetAmount - goal.savedAmount);
   const needed = monthlyNeeded(goal);
   const { label: statusLabel, variant: statusVariant } = STATUS_BADGE[goal.status];
+  const calcLink = getCalculatorForGoalType(goal.type);
 
   const handleEdit = (updated: Goal) => {
     updateGoal(updated.id, updated);
@@ -309,18 +310,22 @@ export function GoalDetailPage() {
           <TimelineBar goal={goal} />
         </div>
 
-        {/* Linked Calculator placeholder */}
+        {/* Linked Calculator */}
         <div className="bg-white rounded-[8px] shadow-card p-5">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-[#28251d]">Linked Calculator</p>
-              <p className="text-xs text-[#7a7974] mt-0.5">Run projections for this goal</p>
+              <p className="text-xs text-[#7a7974] mt-0.5">Review or improve this plan</p>
             </div>
-            <Button variant="secondary" size="sm" className="gap-1.5" disabled>
+            <Link
+              to={goal.linkedCalculator ?? calcLink.route}
+              className="flex items-center gap-1.5 h-9 px-4 rounded-[6px] bg-[#01696f] hover:bg-[#0c4e54] text-white text-sm font-medium transition-colors"
+            >
               <Calculator className="w-4 h-4" />
-              Coming Soon
-            </Button>
+              Open Calculator
+            </Link>
           </div>
+          <p className="text-xs text-[#7a7974] mt-3">{calcLink.name}</p>
         </div>
 
         {/* Contribution history */}
