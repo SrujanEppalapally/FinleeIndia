@@ -6,11 +6,11 @@ import { useTopBarActions } from '../../../contexts/TopBarActionsContext';
 import { formatINR } from '../../../components/ui/CurrencyDisplay';
 import { GOAL_TYPES } from '../../../constants/goalTypes';
 import {
-  MOCK_GOALS,
   Goal,
   GoalStatus,
   formatTargetDate,
   monthlyNeeded,
+  useGoals,
 } from './goalsData';
 
 // ── Types ──────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ const goalTypeOptions = GOAL_TYPES.map((g) => ({ value: g.id, label: `${g.emoji}
 
 // ── Add Goal Modal ─────────────────────────────────────────────
 
-function AddGoalModal({ onSave, onClose }: { onSave: (g: Goal) => void; onClose: () => void }) {
+function AddGoalModal({ onSave, onClose }: { onSave: (g: Omit<Goal, 'id'>) => void; onClose: () => void }) {
   const [name, setName] = useState('');
   const [type, setType] = useState('house');
   const [targetAmount, setTargetAmount] = useState('');
@@ -43,7 +43,6 @@ function AddGoalModal({ onSave, onClose }: { onSave: (g: Goal) => void; onClose:
 
     const gt = GOAL_TYPES.find((g) => g.id === type);
     onSave({
-      id: String(Date.now()),
       name: name.trim(),
       emoji: gt?.emoji ?? '🎯',
       type,
@@ -201,7 +200,7 @@ function GoalCard({ goal }: { goal: Goal }) {
 
 export function GoalsPage() {
   const { setActions } = useTopBarActions();
-  const [goals, setGoals] = useState<Goal[]>(MOCK_GOALS);
+  const { goals, addGoal } = useGoals();
   const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
@@ -219,8 +218,8 @@ export function GoalsPage() {
   const totalSaved  = goals.reduce((s, g) => s + g.savedAmount, 0);
   const activeCount = goals.length;
 
-  const handleAdd = (g: Goal) => {
-    setGoals((prev) => [...prev, g]);
+  const handleAdd = (g: Omit<Goal, 'id'>) => {
+    addGoal(g);
     setAddOpen(false);
   };
 

@@ -1,3 +1,6 @@
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import React from 'react';
+
 export type GoalStatus = 'on-track' | 'at-risk' | 'behind';
 
 export interface Goal {
@@ -10,6 +13,9 @@ export interface Goal {
   targetDate: string;
   monthlyContribution: number;
   status: GoalStatus;
+  linkedCalculator?: string;
+  linkedCalculatorName?: string;
+  source?: string;
 }
 
 export const MOCK_GOALS: Goal[] = [
@@ -64,4 +70,48 @@ export function monthlyNeeded(goal: Goal): number {
   const months = monthsUntil(goal.targetDate);
   if (months <= 0) return 0;
   return Math.max(0, Math.ceil((goal.targetAmount - goal.savedAmount) / months));
+}
+
+// ── Shared in-memory goal store ───────────────────────────────
+
+type GoalInput = Omit<Goal, 'id'>;
+
+interface GoalsContextValue {
+  goals: Goal[];
+  addGoal: (goalInput: GoalInput) => Goal;
+  updateGoal: (id: string, updates: Partial<Goal>) => void;
+  deleteGoal: (id: string) => void;
+  getGoal: (id: string) => Goal | undefined;
+}
+
+const GoalsContext = createContext<GoalsContextValue | null>(null);
+
+export function GoalsProvider({ children }: { children: ReactNode }) {
+  const [goals, setGoals] = useState<Goal[]>(MOCK_GOALS);
+
+  const addGoal = useCallback((goalInput: GoalInput): Goal => {
+    const newGoal: Goal = { ...goalInput, id: `goal-${Date.now()}` };
+    setGoals((prev) => [...prev, newGoal]);
+    return newGoal;
+  }, []);
+
+  const updateGoal = useCallback((id: string, updates: Partial<Goal>) => {
+    setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...updates } : g)));
+  }, []);
+
+  const deleteGoal = useCallback((id: string) => {
+    setGoals((prev) => prev.filter((g) => g.id !== id));
+  }, []);
+
+  const getGoal = useCallback((id: string): Goal | undefined => {
+    return goals.find((g) => g.id === id);
+  }, [goals]);
+
+  return React.createElement(GoalsContext.Provider, { value: { goals, addGoal, updateGoal, deleteGoal, getGoal } }, children);
+}
+
+export function useGoals(): GoalsContextValue {
+  const ctx = useContext(GoalsContext);
+  if (!ctx) throw new Error('useGoals must be used within a GoalsProvider');
+  return ctx;
 }

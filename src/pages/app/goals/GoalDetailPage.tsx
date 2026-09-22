@@ -13,12 +13,12 @@ import { Button, Input, Select, Badge, EmptyState } from '../../../components/ui
 import { formatINR } from '../../../components/ui/CurrencyDisplay';
 import { GOAL_TYPES } from '../../../constants/goalTypes';
 import {
-  MOCK_GOALS,
   Goal,
   GoalStatus,
   formatTargetDate,
   monthlyNeeded,
   monthsUntil,
+  useGoals,
 } from './goalsData';
 
 // ── Types ──────────────────────────────────────────────────────
@@ -235,7 +235,7 @@ export function GoalDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [goals, setGoals] = useState<Goal[]>(MOCK_GOALS);
+  const { goals, updateGoal, deleteGoal } = useGoals();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -258,11 +258,12 @@ export function GoalDetailPage() {
   const { label: statusLabel, variant: statusVariant } = STATUS_BADGE[goal.status];
 
   const handleEdit = (updated: Goal) => {
-    setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
+    updateGoal(updated.id, updated);
     setEditOpen(false);
   };
 
   const handleDelete = () => {
+    deleteGoal(goal.id);
     navigate('/goals');
   };
 

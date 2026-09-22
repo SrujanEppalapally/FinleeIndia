@@ -21,6 +21,7 @@ import { KPICard, Badge, Button, BudgetProgressBar, Skeleton, Input, Select } fr
 import { useToast } from '../../contexts/ToastContext';
 import { useTopBarActions } from '../../contexts/TopBarActionsContext';
 import { useTransactions, type Transaction } from '../../hooks/useTransactions';
+import { useGoals, formatTargetDate as formatGoalTargetDate } from './goals/goalsData';
 import {
   PieChart,
   Pie,
@@ -218,12 +219,6 @@ interface GoalSummary {
   targetDate: string;
   monthlyContribution: number;
 }
-
-const GOAL_SUMMARIES: GoalSummary[] = [
-  { id: '1', emoji: '🏠', name: 'Dream House', saved: 130000, target: 1000000, pct: 13, status: 'at-risk',  targetDate: 'Dec 2031', monthlyContribution: 8500 },
-  { id: '2', emoji: '🚗', name: 'Dream Car',   saved: 135000, target: 500000, pct: 27, status: 'on-track', targetDate: 'Jun 2028', monthlyContribution: 6200 },
-  { id: '3', emoji: '🏖️', name: 'Europe Trip', saved: 80000,  target: 200000, pct: 40, status: 'on-track', targetDate: 'Mar 2027', monthlyContribution: 4200 },
-];
 
 const GOAL_STATUS_BADGE: Record<GoalStatus, { label: string; classes: string }> = {
   'on-track': { label: 'On Track', classes: 'bg-[#437a22]/12 text-[#437a22]' },
@@ -620,6 +615,7 @@ export function DashboardPage() {
   const { showToast } = useToast();
   const { setActions } = useTopBarActions();
   const { data: allTxns, add: addTxnHook } = useTransactions();
+  const { goals: sharedGoals } = useGoals();
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const dashboardMonth = searchParams.get('month') ?? currentMonth();
@@ -715,6 +711,22 @@ export function DashboardPage() {
   }, [subscriptions]);
 
   const netWorth = computeNetWorth(nwItems);
+
+  // Derive goal summaries from shared goal store
+  const goalSummaries: GoalSummary[] = sharedGoals.map((g) => {
+    const pct = g.targetAmount > 0 ? Math.round((g.savedAmount / g.targetAmount) * 100) : 0;
+    return {
+      id: g.id,
+      emoji: g.emoji,
+      name: g.name,
+      saved: g.savedAmount,
+      target: g.targetAmount,
+      pct,
+      status: g.status,
+      targetDate: formatGoalTargetDate(g.targetDate),
+      monthlyContribution: g.monthlyContribution,
+    };
+  });
 
   // Budget comparison for attention card
   const totalBudgetLimit = budgetItems.reduce((s, b) => s + b.limit, 0);
@@ -1052,20 +1064,22 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="divide-y divide-[#f0ede6]">
-            {GOAL_SUMMARIES.map((g, i) => (
+            {goalSummaries.map((g, i) => (
               <div key={g.id} className={i >= 2 ? 'hidden sm:block' : ''}>
                 <GoalSummaryRow goal={g} />
               </div>
             ))}
           </div>
-          <div className="sm:hidden px-5 py-3 border-t border-[#f0ede6]">
-            <Link
-              to="/goals"
-              className="text-xs font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors"
-            >
-              + {GOAL_SUMMARIES.length - 2} more goal{GOAL_SUMMARIES.length - 2 !== 1 ? 's' : ''}
-            </Link>
-          </div>
+          {goalSummaries.length > 2 && (
+            <div className="sm:hidden px-5 py-3 border-t border-[#f0ede6]">
+              <Link
+                to="/goals"
+                className="text-xs font-medium text-[#01696f] hover:text-[#0c4e54] transition-colors"
+              >
+                + {goalSummaries.length - 2} more goal{goalSummaries.length - 2 !== 1 ? 's' : ''}
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* 6. Recent Transactions */}

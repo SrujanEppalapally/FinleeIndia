@@ -32,6 +32,7 @@ import { CategoriesPage } from './pages/app/CategoriesPage';
 import { SettingsLayout } from './layouts/SettingsLayout';
 import { GoalsPage } from './pages/app/goals/GoalsPage';
 import { GoalDetailPage } from './pages/app/goals/GoalDetailPage';
+import { GoalsProvider } from './pages/app/goals/goalsData';
 
 function RequireAuth() {
   const { isAuthenticated } = useAuth();
@@ -127,7 +128,9 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
-          <AppRoutes />
+          <GoalsProvider>
+            <AppRoutes />
+          </GoalsProvider>
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
