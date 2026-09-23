@@ -5,6 +5,8 @@ import { useTopBarActions } from '../../../contexts/TopBarActionsContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { CalcPanel, StepInput, useCalcPanel } from './CalcPanel';
 import type { StepDef } from './CalcPanel';
+import { AddPlanAsGoalButton } from '../goals/GoalsPage';
+import { monthsFromNow } from '../goals/goalsData';
 
 function formatINR(n: number): string {
   const a = Math.abs(n);
@@ -186,6 +188,16 @@ export function RetirementCalculatorPage() {
               <button onClick={panel.openPanel} className="flex items-center gap-1.5 h-9 px-4 rounded-[6px] border border-[#01696f] text-[#01696f] text-sm font-medium hover:bg-[#01696f]/8 transition-colors"><RefreshCw className="w-3.5 h-3.5" /> Recalculate</button>
               <button onClick={() => panel.reset(DEFAULTS)} className="flex items-center gap-1.5 h-9 px-4 rounded-[6px] border border-[#d4d2cc] text-[#7a7974] text-sm font-medium hover:bg-[#f0ede6] transition-colors"><RotateCcw className="w-3.5 h-3.5" /> Reset</button>
             </div>
+            <AddPlanAsGoalButton prefill={{
+              name: 'Retirement',
+              type: 'retirement',
+              targetAmount: result.corpusNeeded,
+              targetDate: monthsFromNow(result.yearsToRetirement * 12),
+              savedAmount: parseFloat(panel.values.currentSavings || '0'),
+              monthlyContribution: result.monthlySipRequired,
+              linkedCalculator: '/calculators/retirement',
+              linkedCalculatorName: 'Retirement Calculator',
+            }} />
           </div>
         ) : (
           <div className="bg-white rounded-[8px] shadow-card p-8 flex flex-col items-center justify-center text-center min-h-[260px] space-y-4">

@@ -66,6 +66,12 @@ export function monthsUntil(ym: string): number {
   return Math.max(0, (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth()));
 }
 
+export function monthsFromNow(months: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export function monthlyNeeded(goal: Goal): number {
   const months = monthsUntil(goal.targetDate);
   if (months <= 0) return 0;

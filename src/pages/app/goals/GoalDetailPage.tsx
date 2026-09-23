@@ -325,7 +325,7 @@ export function GoalDetailPage() {
               Open Calculator
             </Link>
           </div>
-          <p className="text-xs text-[#7a7974] mt-3">{calcLink.name}</p>
+          <p className="text-xs text-[#7a7974] mt-3">{goal.linkedCalculatorName ?? calcLink.name}</p>
         </div>
 
         {/* Contribution history */}

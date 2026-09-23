@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Plane, Share2, Target, X, RefreshCw, RotateCcw } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Button, Input, Select } from '../../../components/ui';
+import { ArrowLeft, Plane, Share2, RefreshCw, RotateCcw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Button, Input } from '../../../components/ui';
 import { useTopBarActions } from '../../../contexts/TopBarActionsContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { GOAL_TYPES } from '../../../constants/goalTypes';
 import { CalcPanel, StepInput, StepTextInput, useCalcPanel } from './CalcPanel';
 import type { StepDef } from './CalcPanel';
+import { AddPlanAsGoalButton } from '../goals/GoalsPage';
+import { monthsFromNow } from '../goals/goalsData';
 
 function formatINR(n: number): string {
   const a = Math.abs(n);
@@ -55,64 +56,6 @@ function PieTip({ active, payload }: { active?: boolean; payload?: Array<{ name:
     <div className="bg-white border border-[#e9e7e1] rounded-[6px] shadow-card px-3 py-2 text-xs">
       <p className="font-semibold text-[#28251d]">{payload[0].name}</p>
       <p className="text-[#7a7974]">{formatINR(payload[0].value)}</p>
-    </div>
-  );
-}
-
-const goalTypeOptions = GOAL_TYPES.map((g) => ({ value: g.id, label: `${g.emoji} ${g.label}` }));
-
-interface AddGoalModalProps {
-  defaultName: string;
-  defaultType: string;
-  defaultTarget: string;
-  defaultMonthly: string;
-  onSave: () => void;
-  onClose: () => void;
-}
-
-function AddGoalModal({ defaultName, defaultType, defaultTarget, defaultMonthly, onSave, onClose }: AddGoalModalProps) {
-  const [name, setName] = useState(defaultName);
-  const [type, setType] = useState(defaultType);
-  const [targetAmount, setTargetAmount] = useState(defaultTarget);
-  const [targetDate, setTargetDate] = useState('');
-  const [savedAmount, setSavedAmount] = useState('');
-  const [monthlyContribution, setMonthlyContribution] = useState(defaultMonthly);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const handleSave = () => {
-    const errs: Record<string, string> = {};
-    if (!name.trim()) errs.name = 'Goal name is required';
-    if (!targetAmount || Number(targetAmount) <= 0) errs.targetAmount = 'Enter a valid target amount';
-    if (!targetDate) errs.targetDate = 'Target date is required';
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    onSave();
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="bg-white rounded-t-[12px] lg:rounded-[8px] shadow-card-md w-full max-w-md relative z-10 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-[#f0ede6]">
-          <h3 className="text-base font-semibold text-[#28251d]">Add Goal</h3>
-          <button onClick={onClose} className="text-[#7a7974] hover:text-[#28251d] transition-colors"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="p-5 space-y-4">
-          <Input label="Goal Name" placeholder="e.g. Trip to Thailand" value={name} onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })); }} error={errors.name} />
-          <Select label="Goal Type" options={goalTypeOptions} value={type} onChange={(e) => setType(e.target.value)} />
-          <Input label="Target Amount (₹)" type="number" placeholder="e.g. 100000" value={targetAmount} onChange={(e) => { setTargetAmount(e.target.value); setErrors((p) => ({ ...p, targetAmount: '' })); }} error={errors.targetAmount} />
-          <div className="w-full flex flex-col gap-1">
-            <label className="text-sm font-medium text-[#28251d]">Target Date</label>
-            <input type="month" value={targetDate} onChange={(e) => { setTargetDate(e.target.value); setErrors((p) => ({ ...p, targetDate: '' })); }} className={['w-full h-10 rounded-[6px] border bg-white text-[#28251d] text-sm px-3 transition-colors focus:outline-none focus:ring-2 focus:ring-[#01696f] focus:border-[#01696f]', errors.targetDate ? 'border-[#a12c7b]' : 'border-[#d4d2cc] hover:border-[#7a7974]'].join(' ')} />
-            {errors.targetDate && <p className="text-xs text-[#a12c7b]">{errors.targetDate}</p>}
-          </div>
-          <Input label="Current Savings (₹)" type="number" placeholder="0" value={savedAmount} onChange={(e) => setSavedAmount(e.target.value)} />
-          <Input label="Monthly Contribution (₹)" type="number" placeholder="0" value={monthlyContribution} onChange={(e) => setMonthlyContribution(e.target.value)} />
-        </div>
-        <div className="flex justify-end gap-3 p-5 border-t border-[#f0ede6]">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave}>Save Goal</Button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -200,12 +143,10 @@ export function TripBudgetCalculatorPage() {
   const { showToast } = useToast();
   const panel = useCalcPanel(DEFAULTS);
   const result = panel.hasResult ? calcTrip(panel.values) : null;
-  const [monthsUntil, setMonthsUntil] = useState('12');
-  const [goalOpen, setGoalOpen] = useState(false);
-  const [goalSaved, setGoalSaved] = useState(false);
+  const [monthsUntilTrip, setMonthsUntilTrip] = useState('12');
 
-  const monthlySaving = result && monthsUntil && Number(monthsUntil) > 0
-    ? Math.ceil(result.totalCost / Number(monthsUntil))
+  const monthlySaving = result && monthsUntilTrip && Number(monthsUntilTrip) > 0
+    ? Math.ceil(result.totalCost / Number(monthsUntilTrip))
     : null;
 
   useEffect(() => {
@@ -224,7 +165,7 @@ export function TripBudgetCalculatorPage() {
     const food = result.pieData.find((d) => d.name === 'Food & Activities')?.value ?? 0;
     const visa = result.pieData.find((d) => d.name === 'Visa / Insurance')?.value ?? 0;
     const shopping = result.pieData.find((d) => d.name === 'Shopping')?.value ?? 0;
-    const savingLine = monthlySaving && monthsUntil ? `\nSave ${formatINR(monthlySaving)}/month for ${monthsUntil} months` : '';
+    const savingLine = monthlySaving && monthsUntilTrip ? `\nSave ${formatINR(monthlySaving)}/month for ${monthsUntilTrip} months` : '';
     const text = [`Trip to ${dest}`, `${panel.values.travellers} traveller${Number(panel.values.travellers) !== 1 ? 's' : ''} | ${panel.values.days} days`, `Flights: ${formatINR(flights)} | Hotel: ${formatINR(hotel)}`, `Food & Activities: ${formatINR(food)}`, `Visa/Insurance: ${formatINR(visa)} | Shopping: ${formatINR(shopping)}`, `Buffer: ${formatINR(buffer)}`, `Total: ${formatINR(result.totalCost)} (${formatINR(result.perPersonCost)} per person)`, savingLine.trim(), `— Planned with Finley`].filter(Boolean).join('\n');
     if (navigator.share) { await navigator.share({ text }); } else { await navigator.clipboard.writeText(text); showToast('Summary copied to clipboard'); }
   };
@@ -249,7 +190,7 @@ export function TripBudgetCalculatorPage() {
               </div>
               <div className="bg-[#f7f6f2] rounded-[8px] p-4 space-y-3">
                 <p className="text-xs font-semibold text-[#7a7974] uppercase tracking-wide">Monthly Saving Plan</p>
-                <Input label="Months until trip" type="number" placeholder="12" value={monthsUntil} onChange={(e) => setMonthsUntil(e.target.value)} />
+                <Input label="Months until trip" type="number" placeholder="12" value={monthsUntilTrip} onChange={(e) => setMonthsUntilTrip(e.target.value)} />
                 {monthlySaving !== null && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-[#7a7974]">Save monthly</span>
@@ -259,13 +200,18 @@ export function TripBudgetCalculatorPage() {
               </div>
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" className="gap-1.5 flex-1" onClick={handleShare}><Share2 className="w-4 h-4" /> Share Breakdown</Button>
-                <Button variant="primary" size="sm" className="gap-1.5 flex-1" onClick={() => { setGoalSaved(false); setGoalOpen(true); }}><Target className="w-4 h-4" /> Add as Goal</Button>
               </div>
-              {goalSaved && (
-                <div className="flex items-center justify-between bg-[#437a22]/10 border border-[#437a22]/20 rounded-[6px] px-4 py-2.5">
-                  <span className="text-sm font-medium text-[#437a22]">Goal added successfully</span>
-                  <Link to="/goals" className="text-sm font-semibold text-[#01696f] hover:underline">View in Goals →</Link>
-                </div>
+              {result && (
+                <AddPlanAsGoalButton prefill={{
+                  name: `Trip to ${panel.values.destination || 'Unknown'}`,
+                  type: 'travel',
+                  targetAmount: result.totalCost,
+                  targetDate: monthsUntilTrip && Number(monthsUntilTrip) > 0 ? monthsFromNow(Number(monthsUntilTrip)) : undefined,
+                  savedAmount: 0,
+                  monthlyContribution: monthlySaving ?? undefined,
+                  linkedCalculator: '/calculators/trip-budget',
+                  linkedCalculatorName: 'Trip Budget Planner',
+                }} />
               )}
             </div>
             <div className="bg-white rounded-[8px] shadow-card p-5">
@@ -294,16 +240,6 @@ export function TripBudgetCalculatorPage() {
         )}
       </div>
       <CalcPanel isOpen={panel.isOpen} onClose={panel.closePanel} onCalculate={() => panel.onCalculate(() => calcTrip(panel.values))} steps={STEPS} values={panel.values} onChange={panel.onChange} errors={panel.errors} setErrors={panel.setErrors} currentStep={panel.currentStep} setCurrentStep={panel.setCurrentStep} returnToReview={panel.returnToReview} setReturnToReview={panel.setReturnToReview} />
-      {goalOpen && result && (
-        <AddGoalModal
-          defaultName={`Trip to ${panel.values.destination || 'Unknown'}`}
-          defaultType="travel"
-          defaultTarget={String(result.totalCost)}
-          defaultMonthly={monthlySaving ? String(monthlySaving) : ''}
-          onSave={() => { setGoalOpen(false); setGoalSaved(true); }}
-          onClose={() => setGoalOpen(false)}
-        />
-      )}
     </>
   );
 }

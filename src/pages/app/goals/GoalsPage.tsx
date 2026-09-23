@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Target, X, ChevronRight } from 'lucide-react';
+import { Plus, Target, X, ChevronRight, Target as TargetIcon, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button, Input, Select, Badge } from '../../../components/ui';
 import { useTopBarActions } from '../../../contexts/TopBarActionsContext';
 import { formatINR } from '../../../components/ui/CurrencyDisplay';
@@ -13,8 +13,6 @@ import {
   useGoals,
 } from './goalsData';
 
-// ── Types ──────────────────────────────────────────────────────
-
 const STATUS_BADGE: Record<GoalStatus, { label: string; variant: 'green' | 'yellow' | 'red' }> = {
   'on-track': { label: 'On Track',  variant: 'green'  },
   'at-risk':  { label: 'At Risk',   variant: 'yellow' },
@@ -25,13 +23,28 @@ const goalTypeOptions = GOAL_TYPES.map((g) => ({ value: g.id, label: `${g.emoji}
 
 // ── Add Goal Modal ─────────────────────────────────────────────
 
-function AddGoalModal({ onSave, onClose }: { onSave: (g: Omit<Goal, 'id'>) => void; onClose: () => void }) {
-  const [name, setName] = useState('');
-  const [type, setType] = useState('house');
-  const [targetAmount, setTargetAmount] = useState('');
-  const [targetDate, setTargetDate] = useState('');
-  const [savedAmount, setSavedAmount] = useState('');
-  const [monthlyContribution, setMonthlyContribution] = useState('');
+export function AddGoalModal({
+  onSave,
+  onClose,
+  initial,
+}: {
+  onSave: (g: Omit<Goal, 'id'>) => void;
+  onClose: () => void;
+  initial?: {
+    name?: string;
+    type?: string;
+    targetAmount?: string;
+    targetDate?: string;
+    savedAmount?: string;
+    monthlyContribution?: string;
+  };
+}) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [type, setType] = useState(initial?.type ?? 'house');
+  const [targetAmount, setTargetAmount] = useState(initial?.targetAmount ?? '');
+  const [targetDate, setTargetDate] = useState(initial?.targetDate ?? '');
+  const [savedAmount, setSavedAmount] = useState(initial?.savedAmount ?? '');
+  const [monthlyContribution, setMonthlyContribution] = useState(initial?.monthlyContribution ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSave = () => {
@@ -121,6 +134,101 @@ function AddGoalModal({ onSave, onClose }: { onSave: (g: Omit<Goal, 'id'>) => vo
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Add Plan as Goal Button (shared by calculators) ────────────
+
+export interface PlanGoalPrefill {
+  name: string;
+  type: string;
+  targetAmount: number;
+  targetDate?: string;
+  savedAmount?: number;
+  monthlyContribution?: number;
+  linkedCalculator: string;
+  linkedCalculatorName: string;
+}
+
+export function AddPlanAsGoalButton({ prefill }: { prefill: PlanGoalPrefill }) {
+  const { goals, addGoal } = useGoals();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [savedState, setSavedState] = useState<{ type: 'success' | 'duplicate'; goalId?: string } | null>(null);
+
+  const existing = goals.find((g) =>
+    g.linkedCalculator === prefill.linkedCalculator &&
+    g.targetAmount === prefill.targetAmount
+  );
+
+  const handleClick = () => {
+    if (existing) {
+      setSavedState({ type: 'duplicate', goalId: existing.id });
+      return;
+    }
+    setSavedState(null);
+    setModalOpen(true);
+  };
+
+  const handleSave = (g: Omit<Goal, 'id'>) => {
+    const newGoal = addGoal({
+      ...g,
+      linkedCalculator: prefill.linkedCalculator,
+      linkedCalculatorName: prefill.linkedCalculatorName,
+      source: 'calculator',
+    });
+    setModalOpen(false);
+    setSavedState({ type: 'success', goalId: newGoal.id });
+  };
+
+  return (
+    <>
+      <button
+        onClick={handleClick}
+        className="flex items-center gap-1.5 h-9 px-4 rounded-[6px] bg-[#01696f] hover:bg-[#0c4e54] text-white text-sm font-medium transition-colors w-full justify-center"
+      >
+        <TargetIcon className="w-4 h-4" />
+        Add This Plan as a Goal
+      </button>
+
+      {savedState?.type === 'success' && (
+        <div className="flex items-center justify-between bg-[#437a22]/10 border border-[#437a22]/20 rounded-[6px] px-4 py-2.5">
+          <span className="flex items-center gap-1.5 text-sm font-medium text-[#437a22]">
+            <CheckCircle2 className="w-4 h-4" />
+            Goal added successfully.
+          </span>
+          <Link to="/goals" className="text-sm font-semibold text-[#01696f] hover:underline">
+            View Goals →
+          </Link>
+        </div>
+      )}
+
+      {savedState?.type === 'duplicate' && savedState.goalId && (
+        <div className="flex items-center justify-between bg-[#b45309]/10 border border-[#b45309]/20 rounded-[6px] px-4 py-2.5">
+          <span className="flex items-center gap-1.5 text-sm font-medium text-[#b45309]">
+            <AlertCircle className="w-4 h-4" />
+            This plan is already linked to a goal.
+          </span>
+          <Link to={`/goals/${savedState.goalId}`} className="text-sm font-semibold text-[#01696f] hover:underline">
+            View Existing Goal →
+          </Link>
+        </div>
+      )}
+
+      {modalOpen && (
+        <AddGoalModal
+          onSave={handleSave}
+          onClose={() => setModalOpen(false)}
+          initial={{
+            name: prefill.name,
+            type: prefill.type,
+            targetAmount: String(prefill.targetAmount),
+            targetDate: prefill.targetDate,
+            savedAmount: prefill.savedAmount != null ? String(prefill.savedAmount) : '',
+            monthlyContribution: prefill.monthlyContribution ? String(prefill.monthlyContribution) : '',
+          }}
+        />
+      )}
+    </>
   );
 }
 
